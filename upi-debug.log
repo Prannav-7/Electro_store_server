@@ -1,0 +1,7 @@
+2025-09-10T05:35:34.739Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-10T05:35:34.741Z: User authenticated: mahesh@gmail.com, ID: 68c10577bbbb83e4b48ea77c
+2025-09-10T05:35:34.741Z: === UPI Payment Verification Started ===
+2025-09-10T05:35:34.742Z: Request body received: orderId=upi_order_1757482527275_8vn1vfnnh, amount=3929, hasOrderData=true, userId=68c10577bbbb83e4b48ea77c
+2025-09-10T05:35:34.743Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-10T05:35:34.819Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df569a","productName":"Havells 32A MCB Single Pole","previousStock":150,"currentStock":132,"quantityReduced":18}]
+2025-09-10T05:35:34.871Z: === UPI Payment Verification Completed Successfully ===
