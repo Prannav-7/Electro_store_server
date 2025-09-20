@@ -75,8 +75,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/images', express.static(path.join(__dirname, '../client/public/images')));
 
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error(err));
+  .then(() => {
+    console.log('✅ MongoDB connected successfully');
+    console.log('Database:', process.env.MONGO_URI.split('@')[1].split('/')[1].split('?')[0]);
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection failed:', err.message);
+    process.exit(1);
+  });
 
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
@@ -87,6 +93,36 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/debug', debugRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/contact', contactRoutes);
+
+// 404 handler for undefined routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`,
+    availableRoutes: [
+      '/health',
+      '/api/products',
+      '/api/users',
+      '/api/orders',
+      '/api/cart',
+      '/api/wishlist',
+      '/api/payment',
+      '/api/debug',
+      '/api/reviews',
+      '/api/contact'
+    ]
+  });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Global error handler:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
 
 // File upload endpoint
 app.post('/api/upload', upload.single('image'), (req, res) => {
@@ -131,4 +167,8 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server started on port ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Server URL: ${process.env.NODE_ENV === 'production' ? 'https://electro-store-server-8m0d.onrender.com' : `http://localhost:${PORT}`}`);
+});
