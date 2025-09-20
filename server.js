@@ -52,6 +52,22 @@ const upload = multer({
 app.use(cors());
 app.use(express.json());
 
+// Add logging middleware for debugging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -98,7 +114,20 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('API running');
+  res.status(200).json({
+    success: true,
+    message: 'Jaimaaruthi Electrical Store API is running!',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      products: '/api/products',
+      users: '/api/users',
+      orders: '/api/orders',
+      cart: '/api/cart',
+      wishlist: '/api/wishlist',
+      payment: '/api/payment'
+    }
+  });
 });
 
 const PORT = process.env.PORT || 5000;
