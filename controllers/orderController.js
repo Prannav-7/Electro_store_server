@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
+const Cart = require('../models/Cart');
 const { checkStockAvailability, reduceStock, restoreStock } = require('../utils/stockManager');
 
 // Create new order
@@ -9,15 +10,29 @@ const createOrder = async (req, res) => {
     const userId = req.user._id;
     const { items, customerDetails, orderSummary, paymentDetails } = req.body;
 
+    console.log('=== CREATE ORDER START ===');
+    console.log('User ID:', userId);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Items:', JSON.stringify(items, null, 2));
+    console.log('Customer Details:', JSON.stringify(customerDetails, null, 2));
+    console.log('Order Summary:', JSON.stringify(orderSummary, null, 2));
+    console.log('Payment Details:', JSON.stringify(paymentDetails, null, 2));
+
     // Check stock availability using utility function
+    console.log('Checking stock availability...');
     const stockCheck = await checkStockAvailability(items);
+    console.log('Stock check result:', JSON.stringify(stockCheck, null, 2));
+
     if (!stockCheck.success) {
+      console.log('Stock check failed, returning 400');
       return res.status(400).json({
         success: false,
         message: stockCheck.message,
         insufficientProducts: stockCheck.insufficientProducts
       });
     }
+
+    console.log('Stock check passed, creating order...');
 
     // Create order
     const order = new Order({
@@ -33,37 +48,65 @@ const createOrder = async (req, res) => {
       paymentStatus: paymentDetails?.method === 'cod' ? 'pending' : 'paid'
     });
 
-    await order.save();
+    console.log('Order object created:', JSON.stringify(order, null, 2));
+
+    const savedOrder = await order.save();
+    console.log('Order saved successfully with ID:', savedOrder._id);
 
     // Reduce stock levels using utility function
     // For both paid orders and COD orders to prevent overselling
-    if (paymentDetails?.status === 'completed' || 
-        paymentDetails?.method === 'cod' || 
+    console.log('Checking if stock reduction is needed...');
+    if (paymentDetails?.status === 'completed' ||
+        paymentDetails?.method === 'cod' ||
         paymentDetails?.method === 'upi' ||
         paymentDetails?.method === 'razorpay') {
+      console.log('Reducing stock levels...');
       const stockReduction = await reduceStock(items);
+      console.log('Stock reduction result:', JSON.stringify(stockReduction, null, 2));
+
       if (!stockReduction.success) {
         // If stock reduction fails, we should consider cancelling the order
-        console.error('Stock reduction failed for order:', order._id);
+        console.error('Stock reduction failed for order:', savedOrder._id);
         return res.status(500).json({
           success: false,
           message: 'Failed to update stock levels. Order may need manual review.',
-          orderId: order._id
+          orderId: savedOrder._id
         });
       }
-      console.log('Stock levels updated for order:', order._id, stockReduction.updatedProducts);
+      console.log('Stock levels updated for order:', savedOrder._id, stockReduction.updatedProducts);
+    } else {
+      console.log('Stock reduction skipped - payment not completed');
     }
 
     // Populate order with product details
-    await order.populate('items.productId');
+    console.log('Populating order with product details...');
+    await savedOrder.populate('items.productId');
+    console.log('Order populated successfully');
 
+    // Clear user's cart after successful order
+    console.log('Clearing user cart...');
+    try {
+      await Cart.findOneAndUpdate(
+        { userId },
+        { items: [] }
+      );
+      console.log('Cart cleared for user after order creation:', userId);
+    } catch (cartError) {
+      console.error('Error clearing cart after order creation:', cartError);
+      // Don't fail the order if cart clearing fails
+    }
+
+    console.log('=== CREATE ORDER SUCCESS ===');
     res.status(201).json({
       success: true,
       message: 'Order placed successfully and stock updated',
-      data: order
+      data: savedOrder
     });
   } catch (error) {
-    console.error('Create order error:', error);
+    console.error('=== CREATE ORDER ERROR ===');
+    console.error('Error details:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error message:', error.message);
     res.status(500).json({
       success: false,
       message: 'Failed to create order',
@@ -508,6 +551,322 @@ const getMonthlySalesSummary = async (req, res) => {
   }
 };
 
+// Check if user has purchased a specific product
+const checkUserPurchase = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { productId } = req.params;
+
+    console.log('=== CHECK USER PURCHASE ===');
+    console.log('User ID:', userId);
+    console.log('Product ID:', productId);
+
+    // Find orders where user has purchased this product
+    const orders = await Order.find({
+      user: userId,
+      'items.product': productId,
+      status: { $in: ['confirmed', 'delivered', 'completed', 'paid'] } // Consider confirmed and paid orders as well
+    });
+
+    const hasPurchased = orders.length > 0;
+    
+    console.log('Orders found:', orders.length);
+    console.log('Has purchased:', hasPurchased);
+
+    res.json({
+      success: true,
+      hasPurchased,
+      orderCount: orders.length
+    });
+  } catch (error) {
+    console.error('Check purchase error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check purchase history'
+    });
+  }
+};
+
+// Get sales analytics data
+const getSalesAnalytics = async (req, res) => {
+  try {
+    const { period = 'month', month } = req.query;
+    
+    // Parse the month parameter (format: YYYY-MM)
+    const targetDate = month ? new Date(month + '-01') : new Date();
+    const startOfPeriod = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    const endOfPeriod = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+    console.log('=== SALES ANALYTICS ===');
+    console.log('Period:', period);
+    console.log('Target Month:', month);
+    console.log('Date Range:', startOfPeriod, 'to', endOfPeriod);
+
+    // Get daily sales for the month
+    const dailySales = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfPeriod, $lte: endOfPeriod },
+          status: { $in: ['confirmed', 'delivered', 'completed', 'paid'] }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+          },
+          revenue: { $sum: "$orderSummary.finalTotal" },
+          orders: { $sum: 1 },
+          customers: { $addToSet: "$userId" }
+        }
+      },
+      {
+        $project: {
+          date: "$_id",
+          revenue: 1,
+          orders: 1,
+          customers: { $size: "$customers" }
+        }
+      },
+      { $sort: { date: 1 } }
+    ]);
+
+    // Get recent orders
+    const recentOrders = await Order.find({
+      createdAt: { $gte: startOfPeriod, $lte: endOfPeriod },
+      status: { $in: ['confirmed', 'delivered', 'completed', 'paid'] }
+    })
+    .populate('userId', 'name email')
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .select('orderId userId orderSummary items createdAt');
+
+    const formattedRecentOrders = recentOrders.map(order => ({
+      orderId: order.orderId || order._id.toString().slice(-8).toUpperCase(),
+      customer: order.userId?.name || 'Unknown Customer',
+      amount: order.orderSummary?.finalTotal || 0,
+      items: order.items?.length || 0,
+      date: order.createdAt.toISOString().split('T')[0]
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        dailySales,
+        recentOrders: formattedRecentOrders
+      }
+    });
+
+  } catch (error) {
+    console.error('Sales analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch sales analytics'
+    });
+  }
+};
+
+// Get monthly comparison data
+const getMonthlyComparison = async (req, res) => {
+  try {
+    const { current, previous } = req.query;
+    
+    console.log('=== MONTHLY COMPARISON ===');
+    console.log('Current month:', current);
+    console.log('Previous month:', previous);
+
+    const months = [previous, current].map(monthStr => {
+      const date = new Date(monthStr + '-01');
+      return {
+        monthStr,
+        start: new Date(date.getFullYear(), date.getMonth(), 1),
+        end: new Date(date.getFullYear(), date.getMonth() + 1, 0),
+        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      };
+    });
+
+    const comparisonData = await Promise.all(
+      months.map(async (month) => {
+        const result = await Order.aggregate([
+          {
+            $match: {
+              createdAt: { $gte: month.start, $lte: month.end },
+              status: { $in: ['confirmed', 'delivered', 'completed', 'paid'] }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              revenue: { $sum: "$orderSummary.finalTotal" },
+              orders: { $sum: 1 }
+            }
+          }
+        ]);
+
+        return {
+          month: month.label,
+          revenue: result[0]?.revenue || 0,
+          orders: result[0]?.orders || 0,
+          growth: 0 // Will calculate after getting both months
+        };
+      })
+    );
+
+    // Calculate growth
+    if (comparisonData.length === 2) {
+      const prevRevenue = comparisonData[0].revenue;
+      const currentRevenue = comparisonData[1].revenue;
+      
+      if (prevRevenue > 0) {
+        comparisonData[1].growth = ((currentRevenue - prevRevenue) / prevRevenue * 100);
+        comparisonData[0].growth = 0; // Previous month baseline
+      }
+    }
+
+    res.json({
+      success: true,
+      data: comparisonData
+    });
+
+  } catch (error) {
+    console.error('Monthly comparison error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch monthly comparison'
+    });
+  }
+};
+
+// Get top products data
+const getTopProducts = async (req, res) => {
+  try {
+    const { month } = req.query;
+    
+    const targetDate = month ? new Date(month + '-01') : new Date();
+    const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+    console.log('=== TOP PRODUCTS ===');
+    console.log('Month:', month);
+    console.log('Date Range:', startOfMonth, 'to', endOfMonth);
+
+    const topProducts = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+          status: { $in: ['confirmed', 'delivered', 'completed', 'paid'] }
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: "$items.product",
+          sales: { $sum: "$items.quantity" },
+          revenue: { $sum: { $multiply: ["$items.quantity", "$items.price"] } }
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "_id",
+          foreignField: "_id",
+          as: "productInfo"
+        }
+      },
+      { $unwind: "$productInfo" },
+      {
+        $project: {
+          name: "$productInfo.name",
+          sales: 1,
+          revenue: 1,
+          category: "$productInfo.category"
+        }
+      },
+      { $sort: { sales: -1 } },
+      { $limit: 10 }
+    ]);
+
+    res.json({
+      success: true,
+      data: topProducts
+    });
+
+  } catch (error) {
+    console.error('Top products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch top products'
+    });
+  }
+};
+
+// Get category breakdown data
+const getCategoryBreakdown = async (req, res) => {
+  try {
+    const { month } = req.query;
+    
+    const targetDate = month ? new Date(month + '-01') : new Date();
+    const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+    console.log('=== CATEGORY BREAKDOWN ===');
+    console.log('Month:', month);
+    console.log('Date Range:', startOfMonth, 'to', endOfMonth);
+
+    const categoryData = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+          status: { $in: ['confirmed', 'delivered', 'completed', 'paid'] }
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.product",
+          foreignField: "_id",
+          as: "productInfo"
+        }
+      },
+      { $unwind: "$productInfo" },
+      {
+        $group: {
+          _id: "$productInfo.category",
+          sales: { $sum: { $multiply: ["$items.quantity", "$items.price"] } }
+        }
+      },
+      {
+        $project: {
+          category: "$_id",
+          sales: 1
+        }
+      },
+      { $sort: { sales: -1 } }
+    ]);
+
+    // Calculate percentages
+    const totalSales = categoryData.reduce((sum, cat) => sum + cat.sales, 0);
+    const categoryBreakdown = categoryData.map(cat => ({
+      category: cat.category,
+      sales: cat.sales,
+      percentage: totalSales > 0 ? Math.round((cat.sales / totalSales) * 100) : 0
+    }));
+
+    res.json({
+      success: true,
+      data: categoryBreakdown
+    });
+
+  } catch (error) {
+    console.error('Category breakdown error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch category breakdown'
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   getUserOrders,
@@ -515,5 +874,242 @@ module.exports = {
   cancelOrder,
   getDailySalesReport,
   getAllOrdersForAdmin,
-  getMonthlySalesSummary
+  getMonthlySalesSummary,
+  checkUserPurchase,
+  getSalesAnalytics,
+};
+
+// Comprehensive Sales Report with Charts Data
+const getSalesReport = async (req, res) => {
+  try {
+    console.log('📊 Fetching comprehensive sales report...');
+    
+    const {
+      startDate,
+      endDate,
+      paymentMethod,
+      status,
+      category
+    } = req.query;
+
+    console.log('Query parameters:', { startDate, endDate, paymentMethod, status, category });
+
+    // Build match query for filters
+    const matchQuery = {};
+
+    // Date range filter
+    if (startDate && endDate) {
+      matchQuery.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999))
+      };
+    }
+
+    // Payment method filter
+    if (paymentMethod && paymentMethod !== 'all') {
+      matchQuery['paymentDetails.method'] = paymentMethod;
+    }
+
+    // Status filter
+    if (status && status !== 'all') {
+      matchQuery.status = status;
+    }
+
+    console.log('Match query:', JSON.stringify(matchQuery, null, 2));
+
+    // Aggregate sales data
+    const salesAggregation = [
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalRevenue: { $sum: '$orderSummary.total' },
+          totalProducts: { $sum: '$orderSummary.itemCount' },
+          averageOrderValue: { $avg: '$orderSummary.total' }
+        }
+      }
+    ];
+
+    // Daily revenue aggregation for line chart
+    const dailyRevenueAggregation = [
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$createdAt' },
+            month: { $month: '$createdAt' },
+            day: { $dayOfMonth: '$createdAt' }
+          },
+          revenue: { $sum: '$orderSummary.total' },
+          orders: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          date: {
+            $dateFromParts: {
+              year: '$_id.year',
+              month: '$_id.month',
+              day: '$_id.day'
+            }
+          },
+          revenue: 1,
+          orders: 1
+        }
+      },
+      { $sort: { date: 1 } }
+    ];
+
+    // Payment method breakdown
+    const paymentMethodAggregation = [
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: '$paymentDetails.method',
+          count: { $sum: 1 },
+          revenue: { $sum: '$orderSummary.total' }
+        }
+      }
+    ];
+
+    // Status breakdown
+    const statusAggregation = [
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          revenue: { $sum: '$orderSummary.total' }
+        }
+      }
+    ];
+
+    // Top products aggregation
+    const topProductsAggregation = [
+      { $match: matchQuery },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.productId',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      { $unwind: '$productInfo' },
+      {
+        $group: {
+          _id: '$items.productId',
+          name: { $first: '$productInfo.name' },
+          category: { $first: '$productInfo.category' },
+          totalQuantity: { $sum: '$items.quantity' },
+          totalRevenue: { $sum: { $multiply: ['$items.quantity', '$items.price'] } },
+          orders: { $sum: 1 }
+        }
+      },
+      { $sort: { totalRevenue: -1 } },
+      { $limit: 20 }
+    ];
+
+    // Execute all aggregations
+    console.log('Executing aggregations...');
+    
+    const [
+      salesSummary,
+      dailyRevenue,
+      paymentMethodBreakdown,
+      statusBreakdown,
+      topProducts
+    ] = await Promise.all([
+      Order.aggregate(salesAggregation),
+      Order.aggregate(dailyRevenueAggregation),
+      Order.aggregate(paymentMethodAggregation),
+      Order.aggregate(statusAggregation),
+      Order.aggregate(topProductsAggregation)
+    ]);
+
+    console.log('Aggregations completed');
+    console.log('Sales summary:', salesSummary);
+    console.log('Daily revenue count:', dailyRevenue.length);
+    console.log('Payment methods:', paymentMethodBreakdown);
+    console.log('Status breakdown:', statusBreakdown);
+    console.log('Top products count:', topProducts.length);
+
+    // Format data for response
+    const summary = salesSummary[0] || {
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalProducts: 0,
+      averageOrderValue: 0
+    };
+
+    // Format payment method breakdown
+    const paymentMethodData = {};
+    paymentMethodBreakdown.forEach(item => {
+      paymentMethodData[item._id || 'unknown'] = {
+        count: item.count,
+        revenue: item.revenue
+      };
+    });
+
+    // Format status breakdown
+    const statusData = {};
+    statusBreakdown.forEach(item => {
+      statusData[item._id || 'unknown'] = {
+        count: item.count,
+        revenue: item.revenue
+      };
+    });
+
+    // Round average order value
+    summary.averageOrderValue = Math.round(summary.averageOrderValue || 0);
+
+    const responseData = {
+      summary,
+      dailyRevenue,
+      paymentMethodBreakdown: paymentMethodData,
+      statusBreakdown: statusData,
+      topProducts
+    };
+
+    console.log('✅ Sales report generated successfully');
+    console.log('Response summary:', {
+      totalOrders: summary.totalOrders,
+      totalRevenue: summary.totalRevenue,
+      dailyRevenuePoints: dailyRevenue.length,
+      paymentMethods: Object.keys(paymentMethodData).length,
+      topProductsCount: topProducts.length
+    });
+
+    res.json({
+      success: true,
+      message: 'Sales report generated successfully',
+      data: responseData
+    });
+
+  } catch (error) {
+    console.error('❌ Error generating sales report:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate sales report',
+      error: error.message
+    });
+  }
+};
+
+module.exports = {
+  createOrder,
+  getUserOrders,
+  getOrderById,
+  cancelOrder,
+  getDailySalesReport,
+  getAllOrdersForAdmin,
+  getMonthlySalesSummary,
+  checkUserPurchase,
+  getSalesAnalytics,
+  getMonthlyComparison,
+  getTopProducts,
+  getCategoryBreakdown,
+  getSalesReport
 };

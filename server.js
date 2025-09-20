@@ -4,6 +4,15 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
+
+// Load environment variables from the .env file in the server directory
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+console.log('Environment variables loaded:');
+console.log('PORT:', process.env.PORT);
+console.log('MONGO_URI:', process.env.MONGO_URI ? 'Found' : 'Missing');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Found' : 'Missing');
+
 const productRoutes = require('./routes/productRoutes');
 const userRoutes = require('./routes/userRoutes');
 const orderRoutes = require('./routes/orderRoutes');
@@ -11,8 +20,8 @@ const wishlistRoutes = require('./routes/wishlistRoutes');
 const cartRoutes = require('./routes/cartRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const debugRoutes = require('./routes/debugRoutes');
-
-dotenv.config();
+const reviewRoutes = require('./routes/reviewRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 const app = express();
 
 // Configure multer for file uploads
@@ -60,6 +69,8 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/debug', debugRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/contact', contactRoutes);
 
 // File upload endpoint
 app.post('/api/upload', upload.single('image'), (req, res) => {

@@ -8,49 +8,61 @@ const logToFile = (message) => {
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
 const Order = require('../models/Order');
+const Cart = require('../models/Cart');
 const { checkStockAvailability, reduceStock } = require('../utils/stockManager');
+const razorpayService = require('../services/razorpayService');
 
-// Initialize Razorpay
+// Initialize Razorpay with live credentials
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_demo_key',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'demo_secret'
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
-// Create Razorpay order
+console.log('🔐 Payment Controller initialized with Live Razorpay credentials');
+console.log('💳 Razorpay Key ID:', process.env.RAZORPAY_KEY_ID);
+console.log('🔗 Payment Link:', process.env.RAZORPAY_PAYMENT_LINK);
+
+// Create Razorpay order with live credentials
 const createPaymentOrder = async (req, res) => {
   try {
-    const { amount, currency = 'INR', receipt } = req.body;
+    console.log('💰 Creating Razorpay payment order with live credentials...');
+    const { amount, currency = 'INR', receipt, customerDetails } = req.body;
 
-    // For demo purposes - create a simulated order that works with real Razorpay checkout
-    const simulatedOrder = {
-      id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      entity: 'order',
-      amount: amount * 100,
-      amount_paid: 0,
-      amount_due: amount * 100,
+    // Use the Razorpay service to create order
+    const result = await razorpayService.createOrder({
+      amount: amount,
       currency: currency,
-      receipt: receipt,
-      status: 'created',
-      created_at: Math.floor(Date.now() / 1000),
-      notes: {
-        userId: req.user._id,
-        source: 'Electric Store - Consultancy Project'
-      }
-    };
-    
-    // Check if we're using demo credentials
-    const isDemoMode = !process.env.RAZORPAY_KEY_ID || 
-                      process.env.RAZORPAY_KEY_ID === 'rzp_test_demo_key' ||
-                      process.env.RAZORPAY_KEY_SECRET === 'demo_secret';
+      receipt: receipt || `order_${Date.now()}`,
+      email: customerDetails?.email,
+      name: customerDetails?.name,
+      items: req.body.items
+    });
+
+    if (!result.success) {
+      console.error('❌ Failed to create Razorpay order:', result.error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create payment order',
+        error: result.error
+      });
+    }
+
+    console.log('✅ Live Razorpay order created successfully');
     
     res.json({
       success: true,
-      order: simulatedOrder,
-      key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_demo_key',
-      demo_mode: isDemoMode
+      order: {
+        id: result.orderId,
+        amount: result.amount,
+        currency: result.currency,
+        key_id: result.key_id
+      },
+      key_id: result.key_id,
+      payment_link: result.paymentLink,
+      demo_mode: false // Using live credentials
     });
   } catch (error) {
-    console.error('Error creating payment order:', error);
+    console.error('❌ Error creating payment order:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create payment order',
@@ -59,9 +71,10 @@ const createPaymentOrder = async (req, res) => {
   }
 };
 
-// Verify payment
+// Verify payment with live Razorpay credentials
 const verifyPayment = async (req, res) => {
   try {
+    console.log('🔍 Verifying Razorpay payment with live credentials...');
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -69,94 +82,137 @@ const verifyPayment = async (req, res) => {
       orderData
     } = req.body;
 
-    // For demo mode - simulate successful payment verification
-    // In a real implementation, you would verify the signature
-    let paymentVerified = true;
-    
-    // If using real Razorpay credentials, verify the signature
-    if (process.env.RAZORPAY_KEY_SECRET && 
-        process.env.RAZORPAY_KEY_SECRET !== 'demo_secret' &&
-        process.env.RAZORPAY_KEY_SECRET !== 'thisissecret') {
-      const sign = razorpay_order_id + "|" + razorpay_payment_id;
-      const expectedSign = crypto
-        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-        .update(sign.toString())
-        .digest("hex");
-      paymentVerified = (razorpay_signature === expectedSign);
-    }
+    // Use the Razorpay service to verify payment signature
+    const verificationResult = razorpayService.verifyPaymentSignature({
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    });
 
-    if (paymentVerified) {
-      // Payment verified successfully
-      
-      if (orderData.items && Array.isArray(orderData.items)) {
-        // Check stock availability using utility function
-        const stockCheck = await checkStockAvailability(orderData.items);
-        if (!stockCheck.success) {
-          return res.status(400).json({
-            success: false,
-            message: stockCheck.message,
-            insufficientProducts: stockCheck.insufficientProducts
-          });
-        }
-        
-        // Reduce stock levels using utility function
-        const stockReduction = await reduceStock(orderData.items);
-        if (!stockReduction.success) {
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to update stock levels'
-          });
-        }
-        
-        console.log('Stock levels updated for Razorpay payment:', stockReduction.updatedProducts);
-      }
-      
-      // Create order in database
-      const order = new Order({
-        ...orderData,
-        userId: req.user._id,
-        paymentDetails: {
-          paymentId: razorpay_payment_id,
-          orderId: razorpay_order_id,
-          signature: razorpay_signature,
-          method: 'razorpay',
-          status: 'completed'
-        },
-        status: 'confirmed',
-        paymentStatus: 'paid'
-      });
-
-      await order.save();
-
-      res.json({
-        success: true,
-        message: 'Payment verified successfully and stock updated',
-        orderId: order._id
-      });
-    } else {
-      res.status(400).json({
+    if (!verificationResult.success) {
+      console.error('❌ Payment signature verification failed');
+      return res.status(400).json({
         success: false,
         message: 'Payment verification failed - Invalid signature'
       });
     }
+
+    console.log('✅ Payment signature verified successfully');
+
+    // Get payment details from Razorpay
+    const paymentDetails = await razorpayService.getPaymentDetails(razorpay_payment_id);
+    
+    if (orderData.items && Array.isArray(orderData.items)) {
+      // Check stock availability using utility function
+      const stockCheck = await checkStockAvailability(orderData.items);
+      if (!stockCheck.success) {
+        return res.status(400).json({
+          success: false,
+          message: stockCheck.message,
+          insufficientProducts: stockCheck.insufficientProducts
+        });
+      }
+      
+      // Reduce stock levels using utility function
+      const stockReduction = await reduceStock(orderData.items);
+      if (!stockReduction.success) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to update stock levels'
+        });
+      }
+      
+      console.log('✅ Stock levels updated for Razorpay payment:', stockReduction.updatedProducts);
+    }
+    
+    // Create order in database
+    const order = new Order({
+      ...orderData,
+      userId: req.user._id,
+      paymentDetails: {
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        signature: razorpay_signature,
+        method: 'razorpay',
+        status: 'completed',
+        amount: paymentDetails.success ? paymentDetails.payment.amount : orderData.orderSummary?.total,
+        paymentMethod: paymentDetails.success ? paymentDetails.payment.method : 'card'
+      },
+      status: 'confirmed',
+      paymentStatus: 'paid'
+    });
+
+    await order.save();
+
+    // Clear user's cart after successful order
+    try {
+      await Cart.findOneAndUpdate(
+        { userId: req.user._id },
+        { items: [] }
+      );
+      console.log('✅ Cart cleared for user after Razorpay payment:', req.user._id);
+    } catch (cartError) {
+      console.error('⚠️ Error clearing cart after Razorpay payment:', cartError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment verified successfully with live Razorpay and stock updated',
+      orderId: order._id,
+      paymentDetails: paymentDetails.success ? paymentDetails.payment : null
+    });
   } catch (error) {
-    console.error('Error verifying payment:', error);
+    console.error('❌ Error verifying payment:', error);
     res.status(500).json({
       success: false,
-      message: 'Payment verification error'
+      message: 'Payment verification error',
+      error: error.message
     });
   }
 };
 
-// Get payment methods
+// Get Razorpay payment link
+const getRazorpayPaymentLink = async (req, res) => {
+  try {
+    console.log('🔗 Getting Razorpay payment link...');
+    const { amount, description } = req.body;
+
+    const linkResult = razorpayService.generateCustomPaymentLink({
+      amount: amount,
+      description: description || 'Jaimaaruthi Electrical Store Purchase'
+    });
+
+    if (!linkResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate payment link',
+        error: linkResult.error
+      });
+    }
+
+    res.json({
+      success: true,
+      paymentLink: linkResult.paymentLink,
+      baseLink: linkResult.baseLink,
+      message: 'Payment link generated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error generating payment link:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate payment link',
+      error: error.message
+    });
+  }
+};
 // Create UPI payment order
 const createUPIOrder = async (req, res) => {
   try {
     const { amount, currency = 'INR', receipt, customer } = req.body;
 
-    // Your UPI merchant details from environment variables
-    const merchantUPI = process.env.MERCHANT_UPI_ID || 'electricstore@paytm';
-    const merchantName = process.env.MERCHANT_NAME || 'Electric Store';
+    // Direct UPI payment details - User's actual account
+    const merchantUPI = 'prannav2511@okhdfcbank';
+    const merchantName = 'Prannav P - Jaimaaruthi Electrical Store';
     
     // Create UPI payment link
     const upiAmount = amount.toFixed(2);
@@ -169,6 +225,10 @@ const createUPIOrder = async (req, res) => {
     const gpayLink = `tez://upi/pay?pa=${merchantUPI}&pn=${encodeURIComponent(merchantName)}&am=${upiAmount}&cu=${currency}&tn=${encodeURIComponent(transactionNote)}`;
     const phonepeLink = `phonepe://pay?pa=${merchantUPI}&pn=${encodeURIComponent(merchantName)}&am=${upiAmount}&cu=${currency}&tn=${encodeURIComponent(transactionNote)}`;
     const paytmLink = `paytmmp://upi/pay?pa=${merchantUPI}&pn=${encodeURIComponent(merchantName)}&am=${upiAmount}&cu=${currency}&tn=${encodeURIComponent(transactionNote)}`;
+    
+    // Additional bank information for display
+    const bankName = 'Karur Vysya Bank';
+    const accountInfo = 'Account 1054';
     
     // Create order in database
     const orderData = {
@@ -199,7 +259,10 @@ const createUPIOrder = async (req, res) => {
       paytm_link: paytmLink,
       vpa: merchantUPI,
       merchant_name: merchantName,
-      qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`
+      bank_name: bankName,
+      account_info: accountInfo,
+      qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`,
+      message: 'Direct payment to merchant account - Karur Vysya Bank 1054'
     });
   } catch (error) {
     console.error('Error creating UPI order:', error);
@@ -368,6 +431,18 @@ const verifyUPIPayment = async (req, res) => {
       userId: savedOrder.userId
     });
 
+    // Clear user's cart after successful UPI payment
+    try {
+      await Cart.findOneAndUpdate(
+        { userId: req.user._id },
+        { items: [] }
+      );
+      console.log('Cart cleared for user after UPI payment:', req.user._id);
+    } catch (cartError) {
+      console.error('Error clearing cart after UPI payment:', cartError);
+      // Don't fail the order if cart clearing fails
+    }
+
     res.json({
       success: true,
       message: 'UPI Payment verified successfully and stock updated',
@@ -402,14 +477,19 @@ const verifyUPIPayment = async (req, res) => {
   }
 };
 
+// Get payment methods
 const getPaymentMethods = async (req, res) => {
   try {
     const paymentMethods = [
       {
-        id: 'upi',
-        name: 'UPI',
+        id: 'direct_upi',
+        name: 'Direct UPI Payment',
         icon: '📱',
-        description: 'Pay using any UPI app',
+        description: 'Pay directly to Karur Vysya Bank 1054 via UPI',
+        primary: true,
+        upi_id: 'prannav2511@okhdfcbank',
+        bank_name: 'Karur Vysya Bank',
+        account_info: 'Account 1054',
         options: [
           { id: 'gpay', name: 'Google Pay', icon: '🟢' },
           { id: 'phonepe', name: 'PhonePe', icon: '🟣' },
@@ -419,9 +499,22 @@ const getPaymentMethods = async (req, res) => {
         ]
       },
       {
+        id: 'razorpay',
+        name: 'Online Payment',
+        icon: '💳',
+        description: 'Pay securely with cards, UPI, net banking (via gateway)',
+        options: [
+          { id: 'card', name: 'Credit/Debit Card', icon: '💳' },
+          { id: 'upi', name: 'UPI', icon: '📱' },
+          { id: 'netbanking', name: 'Net Banking', icon: '🏦' },
+          { id: 'wallet', name: 'Wallets', icon: '💰' }
+        ],
+        paymentLink: process.env.RAZORPAY_PAYMENT_LINK
+      },
+      {
         id: 'cod',
         name: 'Cash on Delivery',
-        icon: '�',
+        icon: '💵',
         description: 'Pay when you receive the order',
         options: []
       }
@@ -429,7 +522,9 @@ const getPaymentMethods = async (req, res) => {
 
     res.json({
       success: true,
-      paymentMethods
+      paymentMethods,
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+      paymentLink: process.env.RAZORPAY_PAYMENT_LINK
     });
   } catch (error) {
     console.error('Error fetching payment methods:', error);
@@ -567,6 +662,18 @@ const verifyCODPayment = async (req, res) => {
       paymentStatus: savedOrder.paymentStatus
     });
 
+    // Clear user's cart after successful COD order
+    try {
+      await Cart.findOneAndUpdate(
+        { userId: req.user._id },
+        { items: [] }
+      );
+      console.log('Cart cleared for user after COD order:', req.user._id);
+    } catch (cartError) {
+      console.error('Error clearing cart after COD order:', cartError);
+      // Don't fail the order if cart clearing fails
+    }
+
     res.json({
       success: true,
       message: 'COD Order placed successfully',
@@ -602,6 +709,7 @@ const verifyCODPayment = async (req, res) => {
 module.exports = {
   createPaymentOrder,
   verifyPayment,
+  getRazorpayPaymentLink,
   createUPIOrder,
   verifyUPIPayment,
   verifyCODPayment,

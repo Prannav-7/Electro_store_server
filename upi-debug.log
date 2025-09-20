@@ -5,3 +5,66 @@
 2025-09-10T05:35:34.743Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
 2025-09-10T05:35:34.819Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df569a","productName":"Havells 32A MCB Single Pole","previousStock":150,"currentStock":132,"quantityReduced":18}]
 2025-09-10T05:35:34.871Z: === UPI Payment Verification Completed Successfully ===
+2025-09-10T17:09:43.415Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-10T17:09:43.418Z: User authenticated: ram@gmail.com, ID: 68c1a7c82677a0672cc0b18b
+2025-09-10T17:09:43.419Z: === UPI Payment Verification Started ===
+2025-09-10T17:09:43.419Z: Request body received: orderId=upi_order_1757524181671_ncr7hfch0, amount=2183, hasOrderData=true, userId=68c1a7c82677a0672cc0b18b
+2025-09-10T17:09:43.419Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-10T17:09:43.722Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a4","productName":"Stanley 19\" Tool Box with Tray","previousStock":35,"currentStock":34,"quantityReduced":1}]
+2025-09-10T17:09:43.927Z: === UPI Payment Verification Completed Successfully ===
+2025-09-11T09:30:50.633Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-11T09:30:50.635Z: User authenticated: sivamm@gmail.com, ID: 68c2968a64f5380a41c0bf64
+2025-09-11T09:30:50.635Z: === UPI Payment Verification Started ===
+2025-09-11T09:30:50.636Z: Request body received: orderId=upi_order_1757583047655_vi1xepzyv, amount=572, hasOrderData=true, userId=68c2968a64f5380a41c0bf64
+2025-09-11T09:30:50.636Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-11T09:30:50.734Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df569b","productName":"Schneider 63A DP MCB","previousStock":80,"currentStock":79,"quantityReduced":1}]
+2025-09-11T09:30:50.788Z: === UPI Payment Verification Completed Successfully ===
+2025-09-11T09:33:55.735Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-11T09:33:55.735Z: User authenticated: prannav@gmail.com, ID: 68c1bc09b4aa9cf652fda39f
+2025-09-11T09:33:55.736Z: === UPI Payment Verification Started ===
+2025-09-11T09:33:55.736Z: Request body received: orderId=upi_order_1757583230095_0r4xj856d, amount=9104, hasOrderData=true, userId=68c1bc09b4aa9cf652fda39f
+2025-09-11T09:33:55.736Z: Order data details: items=3, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-11T09:33:56.013Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a4","productName":"Stanley 19\" Tool Box with Tray","previousStock":34,"currentStock":33,"quantityReduced":1},{"productId":"68c10619439ec6dc78df56a0","productName":"Crompton Greaves 48\" Ceiling Fan","previousStock":45,"currentStock":43,"quantityReduced":2},{"productId":"68c10619439ec6dc78df569d","productName":"Anchor Roma 16A Socket","previousStock":120,"currentStock":119,"quantityReduced":1}]
+2025-09-11T09:33:56.092Z: === UPI Payment Verification Completed Successfully ===
+2025-09-12T17:40:45.064Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-12T17:40:45.066Z: User authenticated: ramr@gmail.com, ID: 68c2ea40f9e3c51f2bcc82d9
+2025-09-12T17:40:45.066Z: === UPI Payment Verification Started ===
+2025-09-12T17:40:45.066Z: Request body received: orderId=upi_order_1757698845007_leycjj72p, amount=454, hasOrderData=true, userId=68c2ea40f9e3c51f2bcc82d9
+2025-09-12T17:40:45.066Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-12T17:40:45.159Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a8","productName":"Wipro 20W LED Tube Light","previousStock":150,"currentStock":149,"quantityReduced":1}]
+2025-09-12T17:40:45.235Z: === UPI Payment Verification Completed Successfully ===
+2025-09-12T17:41:42.417Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-12T17:41:42.418Z: User authenticated: ramr@gmail.com, ID: 68c2ea40f9e3c51f2bcc82d9
+2025-09-12T17:41:42.418Z: === UPI Payment Verification Started ===
+2025-09-12T17:41:42.419Z: Request body received: orderId=upi_order_1757698902373_pizm9r050, amount=4543, hasOrderData=true, userId=68c2ea40f9e3c51f2bcc82d9
+2025-09-12T17:41:42.419Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-12T17:41:42.547Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a1","productName":"Bosch GSB 600 RE Impact Drill","previousStock":25,"currentStock":24,"quantityReduced":1}]
+2025-09-12T17:41:42.597Z: === UPI Payment Verification Completed Successfully ===
+2025-09-12T17:43:58.810Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-12T17:43:58.811Z: User authenticated: ramr@gmail.com, ID: 68c2ea40f9e3c51f2bcc82d9
+2025-09-12T17:43:58.811Z: === UPI Payment Verification Started ===
+2025-09-12T17:43:58.811Z: Request body received: orderId=upi_order_1757699035981_xm567kqir, amount=4543, hasOrderData=true, userId=68c2ea40f9e3c51f2bcc82d9
+2025-09-12T17:43:58.812Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-12T17:43:58.890Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a1","productName":"Bosch GSB 600 RE Impact Drill","previousStock":24,"currentStock":23,"quantityReduced":1}]
+2025-09-12T17:43:58.938Z: === UPI Payment Verification Completed Successfully ===
+2025-09-13T04:25:11.339Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-13T04:25:11.342Z: User authenticated: ramr@gmail.com, ID: 68c2ea40f9e3c51f2bcc82d9
+2025-09-13T04:25:11.343Z: === UPI Payment Verification Started ===
+2025-09-13T04:25:11.344Z: Request body received: orderId=upi_order_1757737506792_hyr60dhjl, amount=4543, hasOrderData=true, userId=68c2ea40f9e3c51f2bcc82d9
+2025-09-13T04:25:11.345Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-13T04:25:11.440Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a1","productName":"Bosch GSB 600 RE Impact Drill","previousStock":23,"currentStock":22,"quantityReduced":1}]
+2025-09-13T04:25:11.538Z: === UPI Payment Verification Completed Successfully ===
+2025-09-13T10:34:10.027Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-13T10:34:10.029Z: User authenticated: ramr@gmail.com, ID: 68c2ea40f9e3c51f2bcc82d9
+2025-09-13T10:34:10.030Z: === UPI Payment Verification Started ===
+2025-09-13T10:34:10.030Z: Request body received: orderId=undefined, amount=12195, hasOrderData=true, userId=68c2ea40f9e3c51f2bcc82d9
+2025-09-13T10:34:10.031Z: Order data details: items=3, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-13T10:34:10.643Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a8","productName":"Wipro 20W LED Tube Light","previousStock":149,"currentStock":148,"quantityReduced":1},{"productId":"68c10619439ec6dc78df56a2","productName":"Polycab 2.5 sq mm House Wire","previousStock":500,"currentStock":498,"quantityReduced":2},{"productId":"68c10619439ec6dc78df56a3","productName":"Kirloskar 1HP Single Phase Motor","previousStock":20,"currentStock":19,"quantityReduced":1}]
+2025-09-13T10:34:10.851Z: === UPI Payment Verification Completed Successfully ===
+2025-09-16T13:31:56.654Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-16T13:31:56.655Z: User authenticated: ramr@gmail.com, ID: 68c2ea40f9e3c51f2bcc82d9
+2025-09-16T13:31:56.656Z: === UPI Payment Verification Started ===
+2025-09-16T13:31:56.656Z: Request body received: orderId=upi_order_1758029509601_vnxh1hjx4, amount=2183, hasOrderData=true, userId=68c2ea40f9e3c51f2bcc82d9
+2025-09-16T13:31:56.656Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-16T13:31:56.777Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df56a4","productName":"Stanley 19\" Tool Box with Tray","previousStock":25,"currentStock":24,"quantityReduced":1}]
+2025-09-16T13:31:56.864Z: === UPI Payment Verification Completed Successfully ===

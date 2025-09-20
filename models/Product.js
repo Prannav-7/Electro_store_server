@@ -95,6 +95,18 @@ const productSchema = new mongoose.Schema({
       default: 0
     }
   },
+  // New review fields
+  averageRating: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
+  },
+  reviewCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   specifications: {
     voltage: String,
     wattage: String,

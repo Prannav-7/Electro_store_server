@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   createPaymentOrder,
   verifyPayment,
+  getRazorpayPaymentLink,
   createUPIOrder,
   verifyUPIPayment,
   verifyCODPayment,
@@ -15,6 +16,9 @@ router.get('/methods', getPaymentMethods);
 
 // Create Razorpay order
 router.post('/create-order', authMiddleware, createPaymentOrder);
+
+// Get Razorpay payment link
+router.post('/razorpay-link', authMiddleware, getRazorpayPaymentLink);
 
 // Create UPI order
 router.post('/create-upi-order', authMiddleware, createUPIOrder);

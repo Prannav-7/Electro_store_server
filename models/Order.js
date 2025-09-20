@@ -52,10 +52,16 @@ const orderSchema = new mongoose.Schema({
     },
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed', 'refunded'],
+      enum: ['pending', 'pending_verification', 'completed', 'failed', 'refunded'],
       default: 'pending'
     },
-    selectedOption: String // For storing specific payment option like 'gpay', 'phonepe', etc.
+    selectedOption: String, // For storing specific payment option like 'gpay', 'phonepe', etc.
+    razorpay_order_id: String, // Razorpay order ID
+    razorpay_payment_id: String, // Razorpay payment ID
+    payment_link: String, // Payment link used
+    amount: Number, // Payment amount
+    timestamp: Date, // Payment timestamp
+    verification_notes: String // Admin notes for payment verification
   },
   status: {
     type: String,
