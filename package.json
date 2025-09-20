@@ -1,14 +1,38 @@
 {
-  "name": "server",
+  "name": "jaimaaruthi-electrical-server",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
+  "description": "Node.js/Express.js backend server for Jaimaaruthi Electrical and Hardware Store with direct UPI payment integration",
+  "license": "PROPRIETARY",
+  "author": "Prannav P <prannav2511@okhdfcbank>",
   "type": "commonjs",
   "main": "server.js",
+  "keywords": [
+    "nodejs",
+    "express",
+    "mongodb",
+    "ecommerce",
+    "electrical-store",
+    "upi-payment",
+    "direct-payment",
+    "karur-vysya-bank",
+    "jwt-auth",
+    "api-server"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Prannav-7/Electro_store_server.git"
+  },
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "start:prod": "NODE_ENV=production node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed": "node seedDatabase.js",
+    "create-admin": "node createAdmin.js",
+    "test-db": "node test-db-connection.js",
+    "test-email": "node test-email-detailed.js",
+    "test-whatsapp": "node test-whatsapp-integration.js",
+    "generate-sales": "node generateSampleSales.js"
   },
   "dependencies": {
     "axios": "^1.11.0",
