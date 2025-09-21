@@ -9,9 +9,9 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "start": "node server-ultra-simple.js",
-    "dev": "node server-ultra-simple.js",
-    "deploy": "node server-ultra-simple.js",
+    "start": "node server-basic.js",
+    "dev": "node server-basic.js",
+    "deploy": "node server-basic.js",
     "test": "echo \"Tests not implemented yet\" && exit 0"
   },
   "dependencies": {
