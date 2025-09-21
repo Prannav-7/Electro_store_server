@@ -152,8 +152,9 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Jaimaaruthi Electrical Store API is running!',
+    message: 'Jaimaaruthi Electrical Store API is running! 🚀',
     version: '1.0.0',
+    timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
       products: '/api/products',
