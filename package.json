@@ -9,12 +9,10 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "start": "node server-minimal.js",
-    "dev": "nodemon server.js",
-    "deploy": "node server-minimal.js",
-    "test": "echo \"Tests not implemented yet\" && exit 0",
-    "seed": "node seedDatabase.js",
-    "create-admin": "node createAdmin.js"
+    "start": "node server-ultra-simple.js",
+    "dev": "node server-ultra-simple.js",
+    "deploy": "node server-ultra-simple.js",
+    "test": "echo \"Tests not implemented yet\" && exit 0"
   },
   "dependencies": {
     "express": "^4.18.2",
