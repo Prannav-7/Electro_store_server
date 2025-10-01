@@ -1,0 +1,7 @@
+2025-09-28T13:35:21.394Z: === UPI PAYMENT VERIFICATION ENDPOINT CALLED ===
+2025-09-28T13:35:21.396Z: User authenticated: ramr@gmail.com, ID: 68c2ea40f9e3c51f2bcc82d9
+2025-09-28T13:35:21.396Z: === UPI Payment Verification Started ===
+2025-09-28T13:35:21.397Z: Request body received: orderId=razorpay_custom_1759066520942, amount=572, hasOrderData=true, userId=68c2ea40f9e3c51f2bcc82d9
+2025-09-28T13:35:21.398Z: Order data details: items=1, customerDetails=firstName,lastName,email,phone,address,city,state,pincode,landmark, orderSummary=present
+2025-09-28T13:35:21.492Z: Stock levels updated successfully: [{"productId":"68c10619439ec6dc78df569b","productName":"Schneider 63A DP MCB","previousStock":69,"currentStock":68,"quantityReduced":1}]
+2025-09-28T13:35:21.581Z: === UPI Payment Verification Completed Successfully ===
