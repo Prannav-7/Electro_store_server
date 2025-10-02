@@ -217,16 +217,40 @@ exports.getAllProducts = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
   try {
+    const { id } = req.params;
+    
+    // Handle sample product IDs (fallback data)
+    if (id.startsWith('sample')) {
+      console.log(`🔍 Sample product request for: ${id}`);
+      const sampleProducts = getSampleProducts();
+      const product = sampleProducts.find(p => p._id === id);
+      
+      if (product) {
+        return res.status(200).json({
+          success: true,
+          data: product,
+          source: 'fallback',
+          message: 'Sample product - database temporarily unavailable'
+        });
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'Sample product not found'
+        });
+      }
+    }
+    
     // Check if database is connected
     if (mongoose.connection.readyState !== 1) {
       return res.status(503).json({
         success: false,
         message: 'Database connection not available',
-        error: 'Service temporarily unavailable'
+        error: 'Service temporarily unavailable',
+        dbState: mongoose.connection.readyState
       });
     }
 
-    const product = await Product.findById(req.params.id)
+    const product = await Product.findById(id)
       .maxTimeMS(10000) // 10 second timeout
       .lean();
     
@@ -239,17 +263,21 @@ exports.getProductById = async (req, res) => {
     
     res.status(200).json({
       success: true,
-      data: product
+      data: product,
+      source: 'database'
     });
   } catch (error) {
-    console.error('Get product by ID error:', error);
+    console.error('❌ Get product by ID error:', error.message);
     
     // Handle specific MongoDB errors
-    if (error.name === 'MongooseError' || error.name === 'MongoError') {
-      return res.status(503).json({
+    if (error.name === 'MongooseError' || 
+        error.name === 'MongoError' ||
+        error.name === 'CastError' ||
+        error.message.includes('Cast to ObjectId failed')) {
+      return res.status(400).json({
         success: false,
-        message: 'Database service unavailable',
-        error: 'Please try again later'
+        message: 'Invalid product ID format',
+        error: 'Please check the product ID and try again'
       });
     }
     
@@ -309,7 +337,17 @@ exports.updateProduct = async (req, res) => {
 
 exports.deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+    
+    // Prevent deletion of sample products (fallback data)
+    if (id.startsWith('sample')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Cannot delete sample product - this is fallback data'
+      });
+    }
+    
+    const product = await Product.findByIdAndDelete(id);
     
     if (!product) {
       return res.status(404).json({
@@ -323,6 +361,17 @@ exports.deleteProduct = async (req, res) => {
       message: 'Product deleted successfully'
     });
   } catch (error) {
+    console.error('❌ Delete product error:', error.message);
+    
+    // Handle specific MongoDB errors
+    if (error.name === 'CastError' || error.message.includes('Cast to ObjectId failed')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format',
+        error: 'Please check the product ID and try again'
+      });
+    }
+    
     res.status(400).json({
       success: false,
       message: 'Failed to delete product',
@@ -372,6 +421,49 @@ exports.restockProduct = async (req, res) => {
 exports.getProductReviews = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Handle sample product IDs (fallback data)
+    if (id.startsWith('sample')) {
+      console.log(`🔍 Sample product review request for: ${id}`);
+      return res.status(200).json({
+        success: true,
+        reviews: [
+          {
+            _id: 'sample_review_1',
+            userName: 'Verified Customer',
+            rating: 5,
+            comment: 'Excellent product quality. Highly recommended for electrical work.',
+            images: [],
+            verified: true,
+            helpful: 12,
+            createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 days ago
+          },
+          {
+            _id: 'sample_review_2',
+            userName: 'Electrical Contractor',
+            rating: 4,
+            comment: 'Good value for money. Works as expected.',
+            images: [],
+            verified: true,
+            helpful: 8,
+            createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) // 15 days ago
+          }
+        ],
+        source: 'fallback',
+        message: 'Sample reviews - database temporarily unavailable'
+      });
+    }
+    
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(200).json({
+        success: true,
+        reviews: [],
+        source: 'fallback',
+        message: 'No reviews available - database temporarily unavailable'
+      });
+    }
+
     const reviews = await Review.find({ productId: id })
       .sort({ createdAt: -1 })
       .populate('userId', 'name');
@@ -387,12 +479,18 @@ exports.getProductReviews = async (req, res) => {
         verified: review.verified,
         helpful: review.helpful,
         createdAt: review.createdAt
-      }))
+      })),
+      source: 'database'
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch reviews',
+    console.error('❌ Get product reviews error:', error.message);
+    
+    // Return empty reviews instead of error for better UX
+    res.status(200).json({
+      success: true,
+      reviews: [],
+      source: 'fallback',
+      message: 'Reviews temporarily unavailable',
       error: error.message
     });
   }
