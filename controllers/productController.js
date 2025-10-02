@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
@@ -5,13 +6,36 @@ const Order = require('../models/Order');
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find();
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection not available',
+        error: 'Service temporarily unavailable'
+      });
+    }
+
+    const products = await Product.find()
+      .maxTimeMS(15000) // 15 second timeout for the query
+      .lean(); // Use lean() for better performance
+      
     res.status(200).json({
       success: true,
       count: products.length,
       data: products
     });
   } catch (error) {
+    console.error('Get all products error:', error);
+    
+    // Handle specific MongoDB errors
+    if (error.name === 'MongooseError' || error.name === 'MongoError') {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service unavailable',
+        error: 'Please try again later'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server Error',
@@ -22,7 +46,18 @@ exports.getAllProducts = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection not available',
+        error: 'Service temporarily unavailable'
+      });
+    }
+
+    const product = await Product.findById(req.params.id)
+      .maxTimeMS(10000) // 10 second timeout
+      .lean();
     
     if (!product) {
       return res.status(404).json({
@@ -36,6 +71,17 @@ exports.getProductById = async (req, res) => {
       data: product
     });
   } catch (error) {
+    console.error('Get product by ID error:', error);
+    
+    // Handle specific MongoDB errors
+    if (error.name === 'MongooseError' || error.name === 'MongoError') {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service unavailable',
+        error: 'Please try again later'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server Error',

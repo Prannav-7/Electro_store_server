@@ -22,6 +22,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const debugRoutes = require('./routes/debugRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const { checkDbConnection } = require('./middleware/dbMiddleware');
 const app = express();
 
 // Configure multer for file uploads
@@ -58,19 +59,86 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Serve static files from public directory (for default images)
 app.use('/images', express.static(path.join(__dirname, '../client/public/images')));
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error(err));
+// Enhanced MongoDB connection configuration for production
+const connectDB = async () => {
+  try {
+    const mongoOptions = {
+      serverSelectionTimeoutMS: 30000, // 30 seconds timeout for initial connection
+      socketTimeoutMS: 45000, // 45 seconds socket timeout
+      maxPoolSize: 10, // Maintain up to 10 socket connections
+      minPoolSize: 2, // Maintain at least 2 socket connections
+      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      retryWrites: true,
+      retryReads: true,
+      heartbeatFrequencyMS: 2000, // Send heartbeat every 2 seconds
+    };
 
-app.use('/api/products', productRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/wishlist', wishlistRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/payment', paymentRoutes);
-app.use('/api/debug', debugRoutes);
-app.use('/api/reviews', reviewRoutes);
-app.use('/api/contact', contactRoutes);
+    console.log('Attempting to connect to MongoDB...');
+    
+    // Configure mongoose settings before connecting
+    mongoose.set('bufferCommands', false);
+    
+    await mongoose.connect(process.env.MONGO_URI, mongoOptions);
+    console.log('✅ MongoDB connected successfully');
+    
+    // Handle connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err);
+    });
+    
+    mongoose.connection.on('disconnected', () => {
+      console.log('⚠️ MongoDB disconnected');
+    });
+    
+    mongoose.connection.on('reconnected', () => {
+      console.log('✅ MongoDB reconnected');
+    });
+    
+  } catch (error) {
+    console.error('❌ MongoDB connection failed:', error.message);
+    // Don't exit in production, let the app handle the error gracefully
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
+  }
+};
+
+// Basic endpoints (don't require DB)
+app.get('/', (req, res) => {
+  res.send('API running');
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState;
+  const statusMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  res.status(dbStatus === 1 ? 200 : 503).json({
+    status: dbStatus === 1 ? 'healthy' : 'unhealthy',
+    database: statusMap[dbStatus],
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Connect to database
+connectDB();
+
+// Apply database connection check to all API routes
+app.use('/api/products', checkDbConnection, productRoutes);
+app.use('/api/users', checkDbConnection, userRoutes);
+app.use('/api/orders', checkDbConnection, orderRoutes);
+app.use('/api/wishlist', checkDbConnection, wishlistRoutes);
+app.use('/api/cart', checkDbConnection, cartRoutes);
+app.use('/api/payment', checkDbConnection, paymentRoutes);
+app.use('/api/debug', debugRoutes); // Debug routes don't need DB connection
+app.use('/api/reviews', checkDbConnection, reviewRoutes);
+app.use('/api/contact', checkDbConnection, contactRoutes);
 
 // File upload endpoint
 app.post('/api/upload', upload.single('image'), (req, res) => {
@@ -97,9 +165,33 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
-  res.send('API running');
-});
-
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+const server = app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+
+// Graceful shutdown handling
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  
+  server.close(async () => {
+    console.log('HTTP server closed');
+    
+    try {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed');
+      process.exit(0);
+    } catch (error) {
+      console.error('Error closing MongoDB connection:', error);
+      process.exit(1);
+    }
+  });
+  
+  // Force shutdown after 30 seconds
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 30000);
+};
+
+// Listen for termination signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
