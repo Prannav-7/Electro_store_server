@@ -16,10 +16,16 @@ const getSampleProducts = () => {
       mrp: 200,
       stock: 100,
       brand: "Philips",
-      imageUrl: "/images/default-product.jpg",
+      imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=300&h=300&fit=crop&crop=center",
       isFeatured: true,
       averageRating: 4.5,
-      reviewCount: 25
+      reviewCount: 25,
+      specifications: {
+        wattage: "12W",
+        voltage: "220V",
+        color: "Warm White",
+        warranty: "2 Years"
+      }
     },
     {
       _id: "sample2",
@@ -30,10 +36,16 @@ const getSampleProducts = () => {
       mrp: 60,
       stock: 500,
       brand: "Havells",
-      imageUrl: "/images/default-product.jpg",
+      imageUrl: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&h=300&fit=crop&crop=center",
       isFeatured: true,
       averageRating: 4.2,
-      reviewCount: 18
+      reviewCount: 18,
+      specifications: {
+        size: "2.5mm",
+        material: "Copper",
+        insulation: "PVC",
+        warranty: "5 Years"
+      }
     },
     {
       _id: "sample3",
@@ -44,10 +56,76 @@ const getSampleProducts = () => {
       mrp: 110,
       stock: 75,
       brand: "Anchor",
-      imageUrl: "/images/default-product.jpg",
+      imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=300&h=300&fit=crop&crop=center",
       isFeatured: true,
       averageRating: 4.7,
-      reviewCount: 32
+      reviewCount: 32,
+      specifications: {
+        amperage: "16A",
+        voltage: "240V",
+        material: "Polycarbonate",
+        warranty: "3 Years"
+      }
+    },
+    {
+      _id: "sample4",
+      name: "Ceiling Fan 48 inch",
+      description: "High-speed ceiling fan with LED light and remote control",
+      category: "Fans & Ventilation",
+      price: 2500,
+      mrp: 3200,
+      stock: 25,
+      brand: "Bajaj",
+      imageUrl: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=300&h=300&fit=crop&crop=center",
+      isFeatured: true,
+      averageRating: 4.3,
+      reviewCount: 45,
+      specifications: {
+        size: "48 inch",
+        speed: "3 Speed",
+        material: "Metal",
+        warranty: "2 Years"
+      }
+    },
+    {
+      _id: "sample5",
+      name: "MCB 32A Circuit Breaker",
+      description: "Miniature Circuit Breaker for electrical safety",
+      category: "Safety Equipment",
+      price: 320,
+      mrp: 450,
+      stock: 150,
+      brand: "Schneider Electric",
+      imageUrl: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&h=300&fit=crop&crop=center",
+      isFeatured: false,
+      averageRating: 4.8,
+      reviewCount: 67,
+      specifications: {
+        amperage: "32A",
+        poles: "Single Pole",
+        breaking: "6kA",
+        warranty: "5 Years"
+      }
+    },
+    {
+      _id: "sample6",
+      name: "Extension Board 6 Socket",
+      description: "Multi-socket extension board with surge protection",
+      category: "Electrical Goods",
+      price: 450,
+      mrp: 600,
+      stock: 80,
+      brand: "Goldmedal",
+      imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=300&h=300&fit=crop&crop=center",
+      isFeatured: false,
+      averageRating: 4.1,
+      reviewCount: 29,
+      specifications: {
+        sockets: "6 Universal",
+        cord: "3 Meter",
+        protection: "Surge Protection",
+        warranty: "1 Year"
+      }
     }
   ];
 };
