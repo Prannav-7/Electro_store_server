@@ -10,10 +10,20 @@ const checkDbConnection = (req, res, next) => {
     3: 'disconnecting'
   };
   
-  console.log(`DB Check - State: ${dbState} (${stateMap[dbState]}) for ${req.method} ${req.path}`);
+  // Only log for non-health endpoints to reduce noise
+  if (!req.path.includes('health') && !req.path.includes('debug')) {
+    console.log(`DB Check - State: ${dbState} (${stateMap[dbState]}) for ${req.method} ${req.path}`);
+  }
   
-  // Allow requests when connected or connecting (for startup)
-  if (dbState === 1 || dbState === 2) {
+  // Allow requests when connected
+  if (dbState === 1) {
+    return next();
+  }
+  
+  // For connecting state, allow the request to proceed but with a warning
+  // The actual database operations will handle the connection state
+  if (dbState === 2) {
+    console.log(`⚠️ Database connecting - allowing request to proceed`);
     return next();
   }
   

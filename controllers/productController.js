@@ -5,52 +5,75 @@ const Order = require('../models/Order');
 
 
 exports.getAllProducts = async (req, res) => {
-  try {
-    console.log('getAllProducts called - DB state:', mongoose.connection.readyState);
-    
-    // Check if database is connected
-    if (mongoose.connection.readyState !== 1) {
-      console.log('Database not connected, returning 503');
-      return res.status(503).json({
-        success: false,
-        message: 'Database connection not available',
-        error: 'Service temporarily unavailable',
-        dbState: mongoose.connection.readyState
-      });
-    }
+  const maxRetries = 3;
+  let retryCount = 0;
 
-    console.log('Attempting to fetch products from database...');
-    const startTime = Date.now();
-    
-    const products = await Product.find()
-      .maxTimeMS(30000) // Increased to 30 seconds for Render
-      .lean(); // Use lean() for better performance
-    
-    const queryTime = Date.now() - startTime;
-    console.log(`✅ Products fetched successfully in ${queryTime}ms, count: ${products.length}`);
+  const attemptQuery = async () => {
+    try {
+      const dbState = mongoose.connection.readyState;
+      console.log(`getAllProducts attempt ${retryCount + 1} - DB state: ${dbState}`);
       
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      data: products,
-      queryTime: queryTime
-    });
+      // If database is connecting, wait a bit
+      if (dbState === 2) {
+        console.log('Database connecting, waiting 2 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      // Check if database is connected after waiting
+      if (mongoose.connection.readyState !== 1) {
+        throw new Error(`Database not ready, state: ${mongoose.connection.readyState}`);
+      }
+
+      console.log('Attempting to fetch products from database...');
+      const startTime = Date.now();
+      
+      const products = await Product.find()
+        .maxTimeMS(15000) // Reduced timeout for faster failure detection
+        .lean();
+      
+      const queryTime = Date.now() - startTime;
+      console.log(`✅ Products fetched successfully in ${queryTime}ms, count: ${products.length}`);
+        
+      return {
+        success: true,
+        count: products.length,
+        data: products,
+        queryTime: queryTime
+      };
+      
+    } catch (error) {
+      console.error(`❌ Query attempt ${retryCount + 1} failed:`, error.message);
+      
+      if (retryCount < maxRetries - 1) {
+        retryCount++;
+        const delay = retryCount * 1000; // 1s, 2s, 3s delays
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return attemptQuery();
+      }
+      
+      throw error;
+    }
+  };
+
+  try {
+    const result = await attemptQuery();
+    res.status(200).json(result);
   } catch (error) {
-    console.error('❌ Get all products error:');
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Full error:', error);
+    console.error('❌ All product query attempts failed:', error.message);
     
     // Handle specific MongoDB errors
     if (error.name === 'MongooseError' || 
         error.name === 'MongoError' || 
         error.name === 'MongoServerError' ||
-        error.message.includes('buffering timed out')) {
+        error.message.includes('buffering timed out') ||
+        error.message.includes('Database not ready')) {
       return res.status(503).json({
         success: false,
         message: 'Database service unavailable',
         error: 'Please try again later',
-        errorType: error.name
+        errorType: error.name,
+        dbState: mongoose.connection.readyState
       });
     }
     

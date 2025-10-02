@@ -61,80 +61,98 @@ app.use('/images', express.static(path.join(__dirname, '../client/public/images'
 
 // Enhanced MongoDB connection configuration for production
 const connectDB = async () => {
-  try {
-    // Log environment info for debugging
-    console.log('=== DATABASE CONNECTION DEBUG INFO ===');
-    console.log('NODE_ENV:', process.env.NODE_ENV);
-    console.log('MONGO_URI exists:', !!process.env.MONGO_URI);
-    console.log('MONGO_URI format check:', process.env.MONGO_URI?.startsWith('mongodb'));
-    console.log('Current working directory:', process.cwd());
-    console.log('Mongoose version:', mongoose.version);
-    
-    if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI environment variable is not defined');
+  let connectionAttempt = 0;
+  const maxConnectionAttempts = 3;
+  
+  const attemptConnection = async () => {
+    try {
+      connectionAttempt++;
+      console.log(`=== DATABASE CONNECTION ATTEMPT ${connectionAttempt}/${maxConnectionAttempts} ===`);
+      console.log('NODE_ENV:', process.env.NODE_ENV);
+      console.log('MONGO_URI exists:', !!process.env.MONGO_URI);
+      console.log('MONGO_URI format check:', process.env.MONGO_URI?.startsWith('mongodb'));
+      console.log('Mongoose version:', mongoose.version);
+      
+      if (!process.env.MONGO_URI) {
+        throw new Error('MONGO_URI environment variable is not defined');
+      }
+
+      // Force close any existing connection
+      if (mongoose.connection.readyState !== 0) {
+        console.log('🔄 Closing existing connection...');
+        await mongoose.connection.close();
+      }
+
+      const mongoOptions = {
+        serverSelectionTimeoutMS: 20000, // Reduced to 20 seconds for faster failure
+        socketTimeoutMS: 20000, 
+        connectTimeoutMS: 20000,
+        maxPoolSize: 5, // Reduced pool size
+        minPoolSize: 1,
+        maxIdleTimeMS: 30000,
+        retryWrites: true,
+        retryReads: true,
+        heartbeatFrequencyMS: 10000, // Less frequent heartbeat
+      };
+
+      console.log('🔄 Attempting MongoDB connection...');
+      
+      // Configure mongoose settings
+      mongoose.set('bufferCommands', false);
+      mongoose.set('strictQuery', false);
+      
+      const startTime = Date.now();
+      await mongoose.connect(process.env.MONGO_URI, mongoOptions);
+      const connectionTime = Date.now() - startTime;
+      
+      console.log(`✅ MongoDB connected successfully in ${connectionTime}ms`);
+      console.log('✅ Connection state:', mongoose.connection.readyState);
+      console.log('✅ Database name:', mongoose.connection.db.databaseName);
+      
+      return true;
+      
+    } catch (error) {
+      console.error(`❌ Connection attempt ${connectionAttempt} failed:`);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      
+      if (connectionAttempt < maxConnectionAttempts) {
+        const delay = connectionAttempt * 2000; // 2s, 4s, 6s delays
+        console.log(`⏳ Waiting ${delay}ms before next attempt...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return attemptConnection();
+      }
+      
+      throw error;
     }
+  };
 
-    const mongoOptions = {
-      serverSelectionTimeoutMS: 60000, // Increased to 60 seconds for Render
-      socketTimeoutMS: 60000, // Increased socket timeout
-      connectTimeoutMS: 60000, // Added connection timeout
-      maxPoolSize: 10, // Maintain up to 10 socket connections
-      minPoolSize: 1, // Reduced minimum for Render
-      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
-      retryWrites: true,
-      retryReads: true,
-      heartbeatFrequencyMS: 5000, // Increased heartbeat frequency
-    };
-
-    console.log('Attempting to connect to MongoDB...');
-    console.log('Connection options:', JSON.stringify(mongoOptions, null, 2));
+  try {
+    await attemptConnection();
     
-    // Configure mongoose settings before connecting
-    mongoose.set('bufferCommands', false);
-    mongoose.set('strictQuery', false);
-    
-    const startTime = Date.now();
-    await mongoose.connect(process.env.MONGO_URI, mongoOptions);
-    const connectionTime = Date.now() - startTime;
-    
-    console.log(`✅ MongoDB connected successfully in ${connectionTime}ms`);
-    console.log('Connection state:', mongoose.connection.readyState);
-    console.log('Database name:', mongoose.connection.db.databaseName);
-    
-    // Handle connection events
+    // Set up connection event handlers after successful connection
     mongoose.connection.on('error', (err) => {
-      console.error('❌ MongoDB connection error:', err.message);
-      console.error('Error details:', err);
+      console.error('❌ MongoDB runtime error:', err.message);
+      // Attempt reconnection on error
+      setTimeout(() => connectDB(), 5000);
     });
     
     mongoose.connection.on('disconnected', () => {
-      console.log('⚠️ MongoDB disconnected - attempting to reconnect...');
+      console.log('⚠️ MongoDB disconnected - will attempt reconnection...');
+      setTimeout(() => connectDB(), 3000);
     });
     
     mongoose.connection.on('reconnected', () => {
       console.log('✅ MongoDB reconnected successfully');
     });
     
-    mongoose.connection.on('connecting', () => {
-      console.log('🔄 MongoDB connecting...');
-    });
-    
   } catch (error) {
-    console.error('❌ MongoDB connection failed:');
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Full error:', error);
+    console.error('❌ All MongoDB connection attempts failed');
+    console.error('Final error:', error.message);
     
-    // For Render, we want to retry connection attempts
-    if (process.env.NODE_ENV === 'production') {
-      console.log('⏳ Retrying connection in 5 seconds...');
-      setTimeout(() => {
-        console.log('🔄 Attempting database reconnection...');
-        connectDB();
-      }, 5000);
-    } else {
-      process.exit(1);
-    }
+    // Don't crash the server - let it run without DB for now
+    console.log('⚠️ Server starting without database connection');
+    console.log('⚠️ Database operations will return 503 until connection is restored');
   }
 };
 
@@ -194,34 +212,12 @@ app.get('/debug', (req, res) => {
   });
 });
 
-// Connect to database with retry logic for Render
-const initializeDatabase = async () => {
-  let retryCount = 0;
-  const maxRetries = 5;
-  const retryDelay = 3000; // 3 seconds
-
-  while (retryCount < maxRetries) {
-    try {
-      await connectDB();
-      console.log('✅ Database initialization successful');
-      return;
-    } catch (error) {
-      retryCount++;
-      console.log(`❌ Database connection attempt ${retryCount}/${maxRetries} failed`);
-      
-      if (retryCount < maxRetries) {
-        console.log(`⏳ Waiting ${retryDelay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-      } else {
-        console.log('❌ All database connection attempts failed');
-        // Continue startup even if DB fails - let middleware handle it
-      }
-    }
-  }
-};
-
-// Initialize database connection
-initializeDatabase();
+// Initialize database connection (non-blocking)
+console.log('🚀 Starting database connection...');
+connectDB().catch(err => {
+  console.error('❌ Initial database connection failed:', err.message);
+  console.log('⚠️ Server will continue running and retry connection');
+});
 
 // Apply database connection check to all API routes
 app.use('/api/products', checkDbConnection, productRoutes);
