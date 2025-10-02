@@ -6,40 +6,59 @@ const Order = require('../models/Order');
 
 exports.getAllProducts = async (req, res) => {
   try {
+    console.log('getAllProducts called - DB state:', mongoose.connection.readyState);
+    
     // Check if database is connected
     if (mongoose.connection.readyState !== 1) {
+      console.log('Database not connected, returning 503');
       return res.status(503).json({
         success: false,
         message: 'Database connection not available',
-        error: 'Service temporarily unavailable'
+        error: 'Service temporarily unavailable',
+        dbState: mongoose.connection.readyState
       });
     }
 
+    console.log('Attempting to fetch products from database...');
+    const startTime = Date.now();
+    
     const products = await Product.find()
-      .maxTimeMS(15000) // 15 second timeout for the query
+      .maxTimeMS(30000) // Increased to 30 seconds for Render
       .lean(); // Use lean() for better performance
+    
+    const queryTime = Date.now() - startTime;
+    console.log(`✅ Products fetched successfully in ${queryTime}ms, count: ${products.length}`);
       
     res.status(200).json({
       success: true,
       count: products.length,
-      data: products
+      data: products,
+      queryTime: queryTime
     });
   } catch (error) {
-    console.error('Get all products error:', error);
+    console.error('❌ Get all products error:');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Full error:', error);
     
     // Handle specific MongoDB errors
-    if (error.name === 'MongooseError' || error.name === 'MongoError') {
+    if (error.name === 'MongooseError' || 
+        error.name === 'MongoError' || 
+        error.name === 'MongoServerError' ||
+        error.message.includes('buffering timed out')) {
       return res.status(503).json({
         success: false,
         message: 'Database service unavailable',
-        error: 'Please try again later'
+        error: 'Please try again later',
+        errorType: error.name
       });
     }
     
     res.status(500).json({
       success: false,
       message: 'Server Error',
-      error: error.message
+      error: error.message,
+      errorType: error.name
     });
   }
 };
