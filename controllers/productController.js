@@ -4,6 +4,54 @@ const Review = require('../models/Review');
 const Order = require('../models/Order');
 
 
+// Sample fallback data for when database is unavailable
+const getSampleProducts = () => {
+  return [
+    {
+      _id: "sample1",
+      name: "LED Bulb 12W",
+      description: "Energy efficient LED bulb suitable for home and office use",
+      category: "Lighting Solutions",
+      price: 150,
+      mrp: 200,
+      stock: 100,
+      brand: "Philips",
+      imageUrl: "/images/default-product.jpg",
+      isFeatured: true,
+      averageRating: 4.5,
+      reviewCount: 25
+    },
+    {
+      _id: "sample2",
+      name: "Electric Wire 2.5mm",
+      description: "High quality copper wire for electrical installations",
+      category: "Wiring & Cables",
+      price: 45,
+      mrp: 60,
+      stock: 500,
+      brand: "Havells",
+      imageUrl: "/images/default-product.jpg",
+      isFeatured: true,
+      averageRating: 4.2,
+      reviewCount: 18
+    },
+    {
+      _id: "sample3",
+      name: "Power Socket 16A",
+      description: "Durable power socket with safety features",
+      category: "Switches & Sockets",
+      price: 85,
+      mrp: 110,
+      stock: 75,
+      brand: "Anchor",
+      imageUrl: "/images/default-product.jpg",
+      isFeatured: true,
+      averageRating: 4.7,
+      reviewCount: 32
+    }
+  ];
+};
+
 exports.getAllProducts = async (req, res) => {
   const maxRetries = 3;
   let retryCount = 0;
@@ -28,7 +76,7 @@ exports.getAllProducts = async (req, res) => {
       const startTime = Date.now();
       
       const products = await Product.find()
-        .maxTimeMS(15000) // Reduced timeout for faster failure detection
+        .maxTimeMS(10000) // Reduced timeout for faster failure detection
         .lean();
       
       const queryTime = Date.now() - startTime;
@@ -38,7 +86,8 @@ exports.getAllProducts = async (req, res) => {
         success: true,
         count: products.length,
         data: products,
-        queryTime: queryTime
+        queryTime: queryTime,
+        source: 'database'
       };
       
     } catch (error) {
@@ -60,28 +109,30 @@ exports.getAllProducts = async (req, res) => {
     const result = await attemptQuery();
     res.status(200).json(result);
   } catch (error) {
-    console.error('❌ All product query attempts failed:', error.message);
+    console.error('❌ All product query attempts failed, returning sample data');
+    console.log('🔄 Triggering database reconnection attempt...');
     
-    // Handle specific MongoDB errors
-    if (error.name === 'MongooseError' || 
-        error.name === 'MongoError' || 
-        error.name === 'MongoServerError' ||
-        error.message.includes('buffering timed out') ||
-        error.message.includes('Database not ready')) {
-      return res.status(503).json({
-        success: false,
-        message: 'Database service unavailable',
-        error: 'Please try again later',
-        errorType: error.name,
-        dbState: mongoose.connection.readyState
-      });
-    }
+    // Trigger reconnection attempt (non-blocking)
+    setTimeout(() => {
+      if (mongoose.connection.readyState === 0) {
+        console.log('🔄 Attempting database reconnection...');
+        mongoose.connect(process.env.MONGO_URI).catch(err => {
+          console.error('❌ Reconnection failed:', err.message);
+        });
+      }
+    }, 1000);
     
-    res.status(500).json({
-      success: false,
-      message: 'Server Error',
-      error: error.message,
-      errorType: error.name
+    // Return sample data instead of 503 error
+    const sampleProducts = getSampleProducts();
+    
+    return res.status(200).json({
+      success: true,
+      count: sampleProducts.length,
+      data: sampleProducts,
+      source: 'fallback',
+      message: 'Using sample data - database temporarily unavailable',
+      dbState: mongoose.connection.readyState,
+      timestamp: new Date().toISOString()
     });
   }
 };

@@ -133,18 +133,35 @@ const connectDB = async () => {
     // Set up connection event handlers after successful connection
     mongoose.connection.on('error', (err) => {
       console.error('❌ MongoDB runtime error:', err.message);
-      // Attempt reconnection on error
-      setTimeout(() => connectDB(), 5000);
+      // Attempt immediate reconnection on error
+      setTimeout(() => {
+        console.log('🔄 Attempting reconnection due to error...');
+        connectDB();
+      }, 2000);
     });
     
     mongoose.connection.on('disconnected', () => {
-      console.log('⚠️ MongoDB disconnected - will attempt reconnection...');
-      setTimeout(() => connectDB(), 3000);
+      console.log('⚠️ MongoDB disconnected - attempting immediate reconnection...');
+      setTimeout(() => {
+        console.log('🔄 Reconnecting after disconnection...');
+        connectDB();
+      }, 1000);
     });
     
     mongoose.connection.on('reconnected', () => {
       console.log('✅ MongoDB reconnected successfully');
     });
+    
+    // Add periodic connection health check
+    setInterval(() => {
+      const dbState = mongoose.connection.readyState;
+      if (dbState === 0 && process.env.NODE_ENV === 'production') {
+        console.log('🔄 Periodic check: Database disconnected, attempting reconnection...');
+        connectDB().catch(err => {
+          console.error('❌ Periodic reconnection failed:', err.message);
+        });
+      }
+    }, 30000); // Check every 30 seconds
     
   } catch (error) {
     console.error('❌ All MongoDB connection attempts failed');
@@ -210,6 +227,43 @@ app.get('/debug', (req, res) => {
       mongooseVersion: mongoose.version,
     }
   });
+});
+
+// Manual reconnection endpoint
+app.post('/reconnect', async (req, res) => {
+  try {
+    console.log('🔄 Manual reconnection requested...');
+    const currentState = mongoose.connection.readyState;
+    
+    if (currentState === 1) {
+      return res.json({
+        success: true,
+        message: 'Database already connected',
+        state: 'connected'
+      });
+    }
+    
+    // Force close existing connection if any
+    if (currentState !== 0) {
+      await mongoose.connection.close();
+    }
+    
+    // Attempt reconnection
+    await connectDB();
+    
+    res.json({
+      success: true,
+      message: 'Reconnection attempt initiated',
+      newState: mongoose.connection.readyState
+    });
+  } catch (error) {
+    console.error('❌ Manual reconnection failed:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Reconnection failed',
+      error: error.message
+    });
+  }
 });
 
 // Initialize database connection (non-blocking)
