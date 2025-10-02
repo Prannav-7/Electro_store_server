@@ -62,7 +62,7 @@ app.use('/images', express.static(path.join(__dirname, '../client/public/images'
 // Enhanced MongoDB connection configuration for production
 const connectDB = async () => {
   let connectionAttempt = 0;
-  const maxConnectionAttempts = 3;
+  const maxConnectionAttempts = process.env.NODE_ENV === 'production' ? 10 : 3; // More attempts in production
   
   const attemptConnection = async () => {
     try {
@@ -81,10 +81,16 @@ const connectDB = async () => {
         console.log('2. ✅ MONGO_URI environment variable set in Render dashboard');
         console.log('3. ✅ Database user has read/write permissions');
         console.log('4. ✅ Network access configured in MongoDB Atlas');
+        console.log('🔍 Current MONGO_URI format:', process.env.MONGO_URI?.substring(0, 50) + '...');
       }
       
       if (!process.env.MONGO_URI) {
         throw new Error('MONGO_URI environment variable is not defined');
+      }
+      
+      // Validate MongoDB URI format
+      if (!process.env.MONGO_URI.includes('mongodb+srv://') && !process.env.MONGO_URI.includes('mongodb://')) {
+        throw new Error('Invalid MONGO_URI format - must start with mongodb:// or mongodb+srv://');
       }
 
       // Force close any existing connection
@@ -95,11 +101,11 @@ const connectDB = async () => {
 
       // MongoDB connection options optimized for Render deployment
       const mongoOptions = {
-        serverSelectionTimeoutMS: 30000, // Increased for Render's network latency
-        socketTimeoutMS: 30000, 
-        connectTimeoutMS: 30000,
-        maxPoolSize: 5,
-        minPoolSize: 1,
+        serverSelectionTimeoutMS: process.env.NODE_ENV === 'production' ? 60000 : 30000, // Longer timeout in production
+        socketTimeoutMS: process.env.NODE_ENV === 'production' ? 60000 : 30000, 
+        connectTimeoutMS: process.env.NODE_ENV === 'production' ? 60000 : 30000,
+        maxPoolSize: 10,
+        minPoolSize: 2,
         maxIdleTimeMS: 30000,
         retryWrites: true,
         retryReads: true,
@@ -108,6 +114,9 @@ const connectDB = async () => {
         family: 4, // Use IPv4, skip trying IPv6
         directConnection: false, // Allow driver to determine best connection
         maxConnecting: 2, // Limit concurrent connection attempts
+        authSource: 'admin', // Specify auth source
+        ssl: true, // Ensure SSL connection
+        tlsAllowInvalidCertificates: false, // Security
       };
 
       console.log('🔄 Attempting MongoDB connection...');
@@ -132,10 +141,19 @@ const connectDB = async () => {
       console.error('Error message:', error.message);
       
       if (connectionAttempt < maxConnectionAttempts) {
-        const delay = connectionAttempt * 2000; // 2s, 4s, 6s delays
+        const delay = Math.min(connectionAttempt * 2000, 10000); // Max 10s delay
         console.log(`⏳ Waiting ${delay}ms before next attempt...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return attemptConnection();
+      }
+      
+      // In production, don't give up - keep trying with longer intervals
+      if (process.env.NODE_ENV === 'production') {
+        console.log('🔄 Production mode: Will keep retrying connection every 30 seconds...');
+        setTimeout(() => {
+          console.log('🔄 Retrying database connection...');
+          connectDB().catch(err => console.error('❌ Retry failed:', err.message));
+        }, 30000);
       }
       
       throw error;
@@ -277,6 +295,45 @@ app.post('/reconnect', async (req, res) => {
       success: false,
       message: 'Reconnection failed',
       error: error.message
+    });
+  }
+});
+
+// Test real product fetching endpoint
+app.get('/test-products', async (req, res) => {
+  try {
+    const dbState = mongoose.connection.readyState;
+    if (dbState !== 1) {
+      return res.json({
+        success: false,
+        message: 'Database not connected',
+        dbState: dbState,
+        fallbackActive: true
+      });
+    }
+    
+    const Product = require('./models/Product');
+    const products = await Product.find().limit(5).lean();
+    
+    res.json({
+      success: true,
+      message: 'Real products fetched successfully',
+      count: products.length,
+      products: products.map(p => ({
+        id: p._id,
+        name: p.name,
+        price: p.price,
+        brand: p.brand,
+        category: p.category
+      })),
+      dbState: dbState
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch real products',
+      error: error.message,
+      dbState: mongoose.connection.readyState
     });
   }
 });
