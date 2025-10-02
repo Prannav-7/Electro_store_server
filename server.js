@@ -62,7 +62,7 @@ app.use('/images', express.static(path.join(__dirname, '../client/public/images'
 // Enhanced MongoDB connection configuration for production
 const connectDB = async () => {
   let connectionAttempt = 0;
-  const maxConnectionAttempts = process.env.NODE_ENV === 'production' ? 10 : 3; // More attempts in production
+  const maxConnectionAttempts = 3;
   
   const attemptConnection = async () => {
     try {
@@ -71,26 +71,10 @@ const connectDB = async () => {
       console.log('NODE_ENV:', process.env.NODE_ENV);
       console.log('MONGO_URI exists:', !!process.env.MONGO_URI);
       console.log('MONGO_URI format check:', process.env.MONGO_URI?.startsWith('mongodb'));
-      console.log('Database name in URI:', process.env.MONGO_URI?.match(/\/([^?]+)/)?.[1]);
       console.log('Mongoose version:', mongoose.version);
-      
-      // Special debugging for Render deployment
-      if (process.env.NODE_ENV === 'production') {
-        console.log('🚀 RENDER DEPLOYMENT - IMPORTANT CHECKLIST:');
-        console.log('1. ✅ MongoDB Atlas IP Whitelist must include 0.0.0.0/0 (or Render IPs)');
-        console.log('2. ✅ MONGO_URI environment variable set in Render dashboard');
-        console.log('3. ✅ Database user has read/write permissions');
-        console.log('4. ✅ Network access configured in MongoDB Atlas');
-        console.log('🔍 Current MONGO_URI format:', process.env.MONGO_URI?.substring(0, 50) + '...');
-      }
       
       if (!process.env.MONGO_URI) {
         throw new Error('MONGO_URI environment variable is not defined');
-      }
-      
-      // Validate MongoDB URI format
-      if (!process.env.MONGO_URI.includes('mongodb+srv://') && !process.env.MONGO_URI.includes('mongodb://')) {
-        throw new Error('Invalid MONGO_URI format - must start with mongodb:// or mongodb+srv://');
       }
 
       // Force close any existing connection
@@ -99,24 +83,16 @@ const connectDB = async () => {
         await mongoose.connection.close();
       }
 
-      // MongoDB connection options optimized for Render deployment
       const mongoOptions = {
-        serverSelectionTimeoutMS: process.env.NODE_ENV === 'production' ? 60000 : 30000, // Longer timeout in production
-        socketTimeoutMS: process.env.NODE_ENV === 'production' ? 60000 : 30000, 
-        connectTimeoutMS: process.env.NODE_ENV === 'production' ? 60000 : 30000,
-        maxPoolSize: 10,
-        minPoolSize: 2,
+        serverSelectionTimeoutMS: 20000, // Reduced to 20 seconds for faster failure
+        socketTimeoutMS: 20000, 
+        connectTimeoutMS: 20000,
+        maxPoolSize: 5, // Reduced pool size
+        minPoolSize: 1,
         maxIdleTimeMS: 30000,
         retryWrites: true,
         retryReads: true,
-        heartbeatFrequencyMS: 10000,
-        // Additional options for better Render compatibility
-        family: 4, // Use IPv4, skip trying IPv6
-        directConnection: false, // Allow driver to determine best connection
-        maxConnecting: 2, // Limit concurrent connection attempts
-        authSource: 'admin', // Specify auth source
-        ssl: true, // Ensure SSL connection
-        tlsAllowInvalidCertificates: false, // Security
+        heartbeatFrequencyMS: 10000, // Less frequent heartbeat
       };
 
       console.log('🔄 Attempting MongoDB connection...');
@@ -141,19 +117,10 @@ const connectDB = async () => {
       console.error('Error message:', error.message);
       
       if (connectionAttempt < maxConnectionAttempts) {
-        const delay = Math.min(connectionAttempt * 2000, 10000); // Max 10s delay
+        const delay = connectionAttempt * 2000; // 2s, 4s, 6s delays
         console.log(`⏳ Waiting ${delay}ms before next attempt...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return attemptConnection();
-      }
-      
-      // In production, don't give up - keep trying with longer intervals
-      if (process.env.NODE_ENV === 'production') {
-        console.log('🔄 Production mode: Will keep retrying connection every 30 seconds...');
-        setTimeout(() => {
-          console.log('🔄 Retrying database connection...');
-          connectDB().catch(err => console.error('❌ Retry failed:', err.message));
-        }, 30000);
       }
       
       throw error;
@@ -166,35 +133,18 @@ const connectDB = async () => {
     // Set up connection event handlers after successful connection
     mongoose.connection.on('error', (err) => {
       console.error('❌ MongoDB runtime error:', err.message);
-      // Attempt immediate reconnection on error
-      setTimeout(() => {
-        console.log('🔄 Attempting reconnection due to error...');
-        connectDB();
-      }, 2000);
+      // Attempt reconnection on error
+      setTimeout(() => connectDB(), 5000);
     });
     
     mongoose.connection.on('disconnected', () => {
-      console.log('⚠️ MongoDB disconnected - attempting immediate reconnection...');
-      setTimeout(() => {
-        console.log('🔄 Reconnecting after disconnection...');
-        connectDB();
-      }, 1000);
+      console.log('⚠️ MongoDB disconnected - will attempt reconnection...');
+      setTimeout(() => connectDB(), 3000);
     });
     
     mongoose.connection.on('reconnected', () => {
       console.log('✅ MongoDB reconnected successfully');
     });
-    
-    // Add periodic connection health check
-    setInterval(() => {
-      const dbState = mongoose.connection.readyState;
-      if (dbState === 0 && process.env.NODE_ENV === 'production') {
-        console.log('🔄 Periodic check: Database disconnected, attempting reconnection...');
-        connectDB().catch(err => {
-          console.error('❌ Periodic reconnection failed:', err.message);
-        });
-      }
-    }, 30000); // Check every 30 seconds
     
   } catch (error) {
     console.error('❌ All MongoDB connection attempts failed');
@@ -260,82 +210,6 @@ app.get('/debug', (req, res) => {
       mongooseVersion: mongoose.version,
     }
   });
-});
-
-// Manual reconnection endpoint
-app.post('/reconnect', async (req, res) => {
-  try {
-    console.log('🔄 Manual reconnection requested...');
-    const currentState = mongoose.connection.readyState;
-    
-    if (currentState === 1) {
-      return res.json({
-        success: true,
-        message: 'Database already connected',
-        state: 'connected'
-      });
-    }
-    
-    // Force close existing connection if any
-    if (currentState !== 0) {
-      await mongoose.connection.close();
-    }
-    
-    // Attempt reconnection
-    await connectDB();
-    
-    res.json({
-      success: true,
-      message: 'Reconnection attempt initiated',
-      newState: mongoose.connection.readyState
-    });
-  } catch (error) {
-    console.error('❌ Manual reconnection failed:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Reconnection failed',
-      error: error.message
-    });
-  }
-});
-
-// Test real product fetching endpoint
-app.get('/test-products', async (req, res) => {
-  try {
-    const dbState = mongoose.connection.readyState;
-    if (dbState !== 1) {
-      return res.json({
-        success: false,
-        message: 'Database not connected',
-        dbState: dbState,
-        fallbackActive: true
-      });
-    }
-    
-    const Product = require('./models/Product');
-    const products = await Product.find().limit(5).lean();
-    
-    res.json({
-      success: true,
-      message: 'Real products fetched successfully',
-      count: products.length,
-      products: products.map(p => ({
-        id: p._id,
-        name: p.name,
-        price: p.price,
-        brand: p.brand,
-        category: p.category
-      })),
-      dbState: dbState
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch real products',
-      error: error.message,
-      dbState: mongoose.connection.readyState
-    });
-  }
 });
 
 // Initialize database connection (non-blocking)

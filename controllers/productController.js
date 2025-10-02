@@ -4,132 +4,6 @@ const Review = require('../models/Review');
 const Order = require('../models/Order');
 
 
-// Sample fallback data for when database is unavailable
-const getSampleProducts = () => {
-  return [
-    {
-      _id: "sample1",
-      name: "LED Bulb 12W",
-      description: "Energy efficient LED bulb suitable for home and office use",
-      category: "Lighting Solutions",
-      price: 150,
-      mrp: 200,
-      stock: 100,
-      brand: "Philips",
-      imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=300&h=300&fit=crop&crop=center",
-      isFeatured: true,
-      averageRating: 4.5,
-      reviewCount: 25,
-      specifications: {
-        wattage: "12W",
-        voltage: "220V",
-        color: "Warm White",
-        warranty: "2 Years"
-      }
-    },
-    {
-      _id: "sample2",
-      name: "Electric Wire 2.5mm",
-      description: "High quality copper wire for electrical installations",
-      category: "Wiring & Cables",
-      price: 45,
-      mrp: 60,
-      stock: 500,
-      brand: "Havells",
-      imageUrl: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&h=300&fit=crop&crop=center",
-      isFeatured: true,
-      averageRating: 4.2,
-      reviewCount: 18,
-      specifications: {
-        size: "2.5mm",
-        material: "Copper",
-        insulation: "PVC",
-        warranty: "5 Years"
-      }
-    },
-    {
-      _id: "sample3",
-      name: "Power Socket 16A",
-      description: "Durable power socket with safety features",
-      category: "Switches & Sockets",
-      price: 85,
-      mrp: 110,
-      stock: 75,
-      brand: "Anchor",
-      imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=300&h=300&fit=crop&crop=center",
-      isFeatured: true,
-      averageRating: 4.7,
-      reviewCount: 32,
-      specifications: {
-        amperage: "16A",
-        voltage: "240V",
-        material: "Polycarbonate",
-        warranty: "3 Years"
-      }
-    },
-    {
-      _id: "sample4",
-      name: "Ceiling Fan 48 inch",
-      description: "High-speed ceiling fan with LED light and remote control",
-      category: "Fans & Ventilation",
-      price: 2500,
-      mrp: 3200,
-      stock: 25,
-      brand: "Bajaj",
-      imageUrl: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=300&h=300&fit=crop&crop=center",
-      isFeatured: true,
-      averageRating: 4.3,
-      reviewCount: 45,
-      specifications: {
-        size: "48 inch",
-        speed: "3 Speed",
-        material: "Metal",
-        warranty: "2 Years"
-      }
-    },
-    {
-      _id: "sample5",
-      name: "MCB 32A Circuit Breaker",
-      description: "Miniature Circuit Breaker for electrical safety",
-      category: "Safety Equipment",
-      price: 320,
-      mrp: 450,
-      stock: 150,
-      brand: "Schneider Electric",
-      imageUrl: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&h=300&fit=crop&crop=center",
-      isFeatured: false,
-      averageRating: 4.8,
-      reviewCount: 67,
-      specifications: {
-        amperage: "32A",
-        poles: "Single Pole",
-        breaking: "6kA",
-        warranty: "5 Years"
-      }
-    },
-    {
-      _id: "sample6",
-      name: "Extension Board 6 Socket",
-      description: "Multi-socket extension board with surge protection",
-      category: "Electrical Goods",
-      price: 450,
-      mrp: 600,
-      stock: 80,
-      brand: "Goldmedal",
-      imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=300&h=300&fit=crop&crop=center",
-      isFeatured: false,
-      averageRating: 4.1,
-      reviewCount: 29,
-      specifications: {
-        sockets: "6 Universal",
-        cord: "3 Meter",
-        protection: "Surge Protection",
-        warranty: "1 Year"
-      }
-    }
-  ];
-};
-
 exports.getAllProducts = async (req, res) => {
   const maxRetries = 3;
   let retryCount = 0;
@@ -154,7 +28,7 @@ exports.getAllProducts = async (req, res) => {
       const startTime = Date.now();
       
       const products = await Product.find()
-        .maxTimeMS(10000) // Reduced timeout for faster failure detection
+        .maxTimeMS(15000) // Reduced timeout for faster failure detection
         .lean();
       
       const queryTime = Date.now() - startTime;
@@ -164,8 +38,7 @@ exports.getAllProducts = async (req, res) => {
         success: true,
         count: products.length,
         data: products,
-        queryTime: queryTime,
-        source: 'database'
+        queryTime: queryTime
       };
       
     } catch (error) {
@@ -187,70 +60,44 @@ exports.getAllProducts = async (req, res) => {
     const result = await attemptQuery();
     res.status(200).json(result);
   } catch (error) {
-    console.error('❌ All product query attempts failed, returning sample data');
-    console.log('🔄 Triggering database reconnection attempt...');
+    console.error('❌ All product query attempts failed:', error.message);
     
-    // Trigger reconnection attempt (non-blocking)
-    setTimeout(() => {
-      if (mongoose.connection.readyState === 0) {
-        console.log('🔄 Attempting database reconnection...');
-        mongoose.connect(process.env.MONGO_URI).catch(err => {
-          console.error('❌ Reconnection failed:', err.message);
-        });
-      }
-    }, 1000);
+    // Handle specific MongoDB errors
+    if (error.name === 'MongooseError' || 
+        error.name === 'MongoError' || 
+        error.name === 'MongoServerError' ||
+        error.message.includes('buffering timed out') ||
+        error.message.includes('Database not ready')) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database service unavailable',
+        error: 'Please try again later',
+        errorType: error.name,
+        dbState: mongoose.connection.readyState
+      });
+    }
     
-    // Return sample data instead of 503 error
-    const sampleProducts = getSampleProducts();
-    
-    return res.status(200).json({
-      success: true,
-      count: sampleProducts.length,
-      data: sampleProducts,
-      source: 'fallback',
-      message: 'Using sample data - database temporarily unavailable',
-      dbState: mongoose.connection.readyState,
-      timestamp: new Date().toISOString()
+    res.status(500).json({
+      success: false,
+      message: 'Server Error',
+      error: error.message,
+      errorType: error.name
     });
   }
 };
 
 exports.getProductById = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    // Handle sample product IDs (fallback data)
-    if (id.startsWith('sample')) {
-      console.log(`🔍 Sample product request for: ${id}`);
-      const sampleProducts = getSampleProducts();
-      const product = sampleProducts.find(p => p._id === id);
-      
-      if (product) {
-        return res.status(200).json({
-          success: true,
-          data: product,
-          source: 'fallback',
-          message: 'Sample product - database temporarily unavailable'
-        });
-      } else {
-        return res.status(404).json({
-          success: false,
-          message: 'Sample product not found'
-        });
-      }
-    }
-    
     // Check if database is connected
     if (mongoose.connection.readyState !== 1) {
       return res.status(503).json({
         success: false,
         message: 'Database connection not available',
-        error: 'Service temporarily unavailable',
-        dbState: mongoose.connection.readyState
+        error: 'Service temporarily unavailable'
       });
     }
 
-    const product = await Product.findById(id)
+    const product = await Product.findById(req.params.id)
       .maxTimeMS(10000) // 10 second timeout
       .lean();
     
@@ -263,21 +110,17 @@ exports.getProductById = async (req, res) => {
     
     res.status(200).json({
       success: true,
-      data: product,
-      source: 'database'
+      data: product
     });
   } catch (error) {
-    console.error('❌ Get product by ID error:', error.message);
+    console.error('Get product by ID error:', error);
     
     // Handle specific MongoDB errors
-    if (error.name === 'MongooseError' || 
-        error.name === 'MongoError' ||
-        error.name === 'CastError' ||
-        error.message.includes('Cast to ObjectId failed')) {
-      return res.status(400).json({
+    if (error.name === 'MongooseError' || error.name === 'MongoError') {
+      return res.status(503).json({
         success: false,
-        message: 'Invalid product ID format',
-        error: 'Please check the product ID and try again'
+        message: 'Database service unavailable',
+        error: 'Please try again later'
       });
     }
     
@@ -337,17 +180,7 @@ exports.updateProduct = async (req, res) => {
 
 exports.deleteProduct = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    // Prevent deletion of sample products (fallback data)
-    if (id.startsWith('sample')) {
-      return res.status(403).json({
-        success: false,
-        message: 'Cannot delete sample product - this is fallback data'
-      });
-    }
-    
-    const product = await Product.findByIdAndDelete(id);
+    const product = await Product.findByIdAndDelete(req.params.id);
     
     if (!product) {
       return res.status(404).json({
@@ -361,17 +194,6 @@ exports.deleteProduct = async (req, res) => {
       message: 'Product deleted successfully'
     });
   } catch (error) {
-    console.error('❌ Delete product error:', error.message);
-    
-    // Handle specific MongoDB errors
-    if (error.name === 'CastError' || error.message.includes('Cast to ObjectId failed')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid product ID format',
-        error: 'Please check the product ID and try again'
-      });
-    }
-    
     res.status(400).json({
       success: false,
       message: 'Failed to delete product',
@@ -421,49 +243,6 @@ exports.restockProduct = async (req, res) => {
 exports.getProductReviews = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Handle sample product IDs (fallback data)
-    if (id.startsWith('sample')) {
-      console.log(`🔍 Sample product review request for: ${id}`);
-      return res.status(200).json({
-        success: true,
-        reviews: [
-          {
-            _id: 'sample_review_1',
-            userName: 'Verified Customer',
-            rating: 5,
-            comment: 'Excellent product quality. Highly recommended for electrical work.',
-            images: [],
-            verified: true,
-            helpful: 12,
-            createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 days ago
-          },
-          {
-            _id: 'sample_review_2',
-            userName: 'Electrical Contractor',
-            rating: 4,
-            comment: 'Good value for money. Works as expected.',
-            images: [],
-            verified: true,
-            helpful: 8,
-            createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) // 15 days ago
-          }
-        ],
-        source: 'fallback',
-        message: 'Sample reviews - database temporarily unavailable'
-      });
-    }
-    
-    // Check if database is connected
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(200).json({
-        success: true,
-        reviews: [],
-        source: 'fallback',
-        message: 'No reviews available - database temporarily unavailable'
-      });
-    }
-
     const reviews = await Review.find({ productId: id })
       .sort({ createdAt: -1 })
       .populate('userId', 'name');
@@ -479,18 +258,12 @@ exports.getProductReviews = async (req, res) => {
         verified: review.verified,
         helpful: review.helpful,
         createdAt: review.createdAt
-      })),
-      source: 'database'
+      }))
     });
   } catch (error) {
-    console.error('❌ Get product reviews error:', error.message);
-    
-    // Return empty reviews instead of error for better UX
-    res.status(200).json({
-      success: true,
-      reviews: [],
-      source: 'fallback',
-      message: 'Reviews temporarily unavailable',
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch reviews',
       error: error.message
     });
   }
