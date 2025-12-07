@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MongoDB Atlas Sales Data - Real Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px;
+        }
+        .status.success { background: #10b981; }
+        .status.loading { background: #f59e0b; }
+        .status.error { background: #ef4444; }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .metric-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        .metric-label {
+            font-size: 1rem;
+            opacity: 0.8;
+        }
+        .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 30px;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        .daily-sales {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .daily-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .daily-date {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            margin-bottom: 8px;
+        }
+        .daily-revenue {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #10b981;
+        }
+        .daily-orders {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        .data-source {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(16, 185, 129, 0.2);
+            border-radius: 10px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 MongoDB Atlas Sales Analytics</h1>
+            <p>Real sales data from your Electro database</p>
+            <div id="connectionStatus">
+                <span class="status loading">🔄 Connecting to MongoDB Atlas...</span>
+            </div>
+        </div>
+
+        <div class="data-source">
+            <strong>🔗 Data Source:</strong> mongodb+srv://...@cluster0.xgscvbf.mongodb.net/Electro<br>
+            <strong>📊 Database:</strong> Electro (MongoDB Atlas)
+        </div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div style="font-size: 2rem;">💰</div>
+                <div class="metric-value" id="totalRevenue">Loading...</div>
+                <div class="metric-label">Total Revenue (30 days)</div>
+            </div>
+            <div class="metric-card">
+                <div style="font-size: 2rem;">🛒</div>
+                <div class="metric-value" id="totalOrders">Loading...</div>
+                <div class="metric-label">Total Orders</div>
+            </div>
+            <div class="metric-card">
+                <div style="font-size: 2rem;">📈</div>
+                <div class="metric-value" id="avgOrderValue">Loading...</div>
+                <div class="metric-label">Average Order Value</div>
+            </div>
+            <div class="metric-card">
+                <div style="font-size: 2rem;">📅</div>
+                <div class="metric-value" id="todayRevenue">Loading...</div>
+                <div class="metric-label">Today's Revenue</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h3>📈 Revenue Trend - Last 30 Days (MongoDB Atlas Data)</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button onclick="loadChart(7)">Last 7 Days</button>
+                <button onclick="loadChart(30)" id="defaultBtn">Last 30 Days</button>
+                <button onclick="loadChart(90)">Last 90 Days</button>
+                <button onclick="refreshData()">🔄 Refresh Data</button>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="revenueChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h3>📊 Daily Sales Breakdown</h3>
+            <div id="dailySalesBreakdown">
+                <p>Loading daily sales data from MongoDB Atlas...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+        let salesData = {};
+
+        // Your MongoDB Atlas database URL (shown for reference)
+        const DATABASE_INFO = {
+            connection: 'mongodb+srv://prannavp803_db_user@cluster0.xgscvbf.mongodb.net',
+            database: 'Electro',
+            collection: 'orders'
+        };
+
+        async function fetchSalesData() {
+            try {
+                console.log('🔄 Fetching data from MongoDB Atlas database: Electro');
+                
+                // Update connection status
+                document.getElementById('connectionStatus').innerHTML = 
+                    '<span class="status loading">🔄 Fetching from MongoDB Atlas...</span>';
+
+                // Fetch sales analytics data
+                const response = await fetch('http://localhost:5000/api/orders/admin/sales-analytics?month=2025-10');
+                const data = await response.json();
+
+                if (data.success) {
+                    salesData = data.data;
+                    console.log('✅ Successfully fetched MongoDB data:', salesData);
+                    
+                    // Update connection status
+                    document.getElementById('connectionStatus').innerHTML = 
+                        '<span class="status success">✅ Connected to MongoDB Atlas - Database: Electro</span>';
+                    
+                    // Update metrics
+                    updateMetrics();
+                    loadChart(30); // Default to 30 days
+                    updateDailyBreakdown();
+                } else {
+                    throw new Error('Failed to fetch sales data from MongoDB');
+                }
+            } catch (error) {
+                console.error('❌ MongoDB connection error:', error);
+                document.getElementById('connectionStatus').innerHTML = 
+                    '<span class="status error">❌ Failed to connect to MongoDB Atlas</span>';
+                
+                // Show error in metrics
+                ['totalRevenue', 'totalOrders', 'avgOrderValue', 'todayRevenue'].forEach(id => {
+                    document.getElementById(id).textContent = 'Error';
+                });
+            }
+        }
+
+        function updateMetrics() {
+            // Calculate totals from daily sales data
+            let totalRevenue = 0;
+            let totalOrders = 0;
+            let todayRevenue = 0;
+            
+            const today = new Date().toISOString().split('T')[0];
+            
+            if (salesData.dailySales) {
+                salesData.dailySales.forEach(day => {
+                    totalRevenue += day.revenue || 0;
+                    totalOrders += day.orders || 0;
+                    
+                    if (day.date === today) {
+                        todayRevenue = day.revenue || 0;
+                    }
+                });
+            }
+            
+            const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+            
+            // Update UI
+            document.getElementById('totalRevenue').textContent = '₹' + totalRevenue.toLocaleString();
+            document.getElementById('totalOrders').textContent = totalOrders.toLocaleString();
+            document.getElementById('avgOrderValue').textContent = '₹' + avgOrderValue.toLocaleString();
+            document.getElementById('todayRevenue').textContent = '₹' + todayRevenue.toLocaleString();
+            
+            console.log('📊 Calculated metrics:', {
+                totalRevenue,
+                totalOrders,
+                avgOrderValue,
+                todayRevenue
+            });
+        }
+
+        function updateDailyBreakdown() {
+            const container = document.getElementById('dailySalesBreakdown');
+            
+            if (!salesData.dailySales || salesData.dailySales.length === 0) {
+                container.innerHTML = '<p>No sales data available for the selected period.</p>';
+                return;
+            }
+            
+            const html = '<div class="daily-sales">' + 
+                salesData.dailySales.map(day => `
+                    <div class="daily-item">
+                        <div class="daily-date">${new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                        <div class="daily-revenue">₹${(day.revenue || 0).toLocaleString()}</div>
+                        <div class="daily-orders">${day.orders || 0} orders</div>
+                    </div>
+                `).join('') + 
+                '</div>';
+            
+            container.innerHTML = html;
+        }
+
+        function loadChart(days = 30) {
+            if (!salesData.dailySales) {
+                console.warn('No sales data available for chart');
+                return;
+            }
+
+            // Prepare chart data
+            const labels = [];
+            const revenue = [];
+            
+            // Get last N days
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - (days - 1));
+            
+            for (let i = days - 1; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                labels.push(date.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                }));
+                
+                // Find data for this date
+                const dayData = salesData.dailySales.find(d => d.date === dateStr);
+                revenue.push(dayData ? dayData.revenue || 0 : 0);
+            }
+
+            // Create or update chart
+            const ctx = document.getElementById('revenueChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+            
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Revenue (MongoDB Atlas)',
+                        data: revenue,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#667eea',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff',
+                                font: { size: 12, weight: '500' }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            borderColor: 'rgba(255, 255, 255, 0.2)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Revenue: ₹' + context.parsed.y.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#ffffff', font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { 
+                                color: '#ffffff', 
+                                font: { size: 11 },
+                                callback: function(value) {
+                                    return '₹' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            console.log(`📈 Chart updated with ${days} days of MongoDB data`);
+        }
+
+        function refreshData() {
+            fetchSalesData();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Initializing MongoDB Atlas Sales Analytics');
+            console.log('📊 Database:', DATABASE_INFO.database);
+            console.log('🔗 Connection:', DATABASE_INFO.connection);
+            
+            fetchSalesData();
+        });
+    </script>
+</body>
+</html>
