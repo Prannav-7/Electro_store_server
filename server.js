@@ -276,3 +276,5 @@ const gracefulShutdown = async (signal) => {
 // Listen for termination signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+mongodb+srv;//prannavp803_db_user:Prannav%402005@cluster0.xgscvbf.mongodb.net/Electro?retryWrites=true&w=majority&appName=Cluster0

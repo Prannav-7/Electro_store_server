@@ -38,5 +38,11 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
-  }
+  },
+  "env": {
+    "MONGO_URI": "mongodb+srv://prannavp803_db_user:Prannav%402005@cluster0.xgscvbf.mongodb.net/Electro?retryWrites=true&w=majority&appName=Cluster0"
+  },
+  "healthEndpoint": "https://electro-store-server-8n0d.onrender.com/health",
+  "status": "healthy",
+  "database": "connected"
 }
